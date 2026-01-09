@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Arm Control - XYZ Controller</title>
+    <meta name="description" content="Control your ESP32 robotic arm with XYZ coordinates using this web interface">
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-effects">
+        <div class="grid-lines"></div>
+        <div class="floating-particles" id="particles"></div>
+    </div>
+
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 100 100" class="robot-svg">
+                        <circle cx="50" cy="30" r="15" class="head" />
+                        <rect x="35" y="45" width="30" height="35" rx="5" class="body" />
+                        <line x1="35" y1="55" x2="15" y2="70" class="arm left-arm" />
+                        <line x1="65" y1="55" x2="85" y2="70" class="arm right-arm" />
+                        <circle cx="15" cy="70" r="5" class="hand" />
+                        <circle cx="85" cy="70" r="5" class="hand" />
+                    </svg>
+                </div>
+                <h1>ROBOT ARM <span class="highlight">CONTROL</span></h1>
+            </div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- 3D Visualization -->
+            <section class="visualization-panel glass-panel">
+                <div class="viz-header">
+                    <h2><span class="icon">🎯</span> Arm Visualization</h2>
+                    <div class="view-selector">
+                        <button class="view-btn active" data-view="side" title="Side View (XZ)">
+                            <span>SIDE</span>
+                        </button>
+                        <button class="view-btn" data-view="top" title="Top View (XY)">
+                            <span>TOP</span>
+                        </button>
+                        <button class="view-btn" data-view="front" title="Front View (YZ)">
+                            <span>FRONT</span>
+                        </button>
+                        <button class="view-btn" data-view="3d" title="3D Isometric">
+                            <span>3D</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="armCanvas" width="400" height="300"></canvas>
+                </div>
+                <div class="current-position">
+                    <div class="pos-item">
+                        <span class="label">X:</span>
+                        <span class="value" id="currentX">0</span>
+                    </div>
+                    <div class="pos-item">
+                        <span class="label">Y:</span>
+                        <span class="value" id="currentY">0</span>
+                    </div>
+                    <div class="pos-item">
+                        <span class="label">Z:</span>
+                        <span class="value" id="currentZ">0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Camera & Object Detection -->
+            <section class="camera-panel glass-panel">
+                <div class="viz-header">
+                    <h2><span class="icon">📷</span> Object Detection</h2>
+                    <div class="camera-status" id="cameraStatus">
+                        <span class="status-dot offline"></span>
+                        <span class="status-text">Offline</span>
+                    </div>
+                </div>
+                <div class="camera-view-container">
+                    <img id="cameraFeed" class="camera-feed" alt="Camera Feed">
+                    <div class="camera-overlay" id="cameraOverlay">
+                        <span>Click "Start Camera" to begin</span>
+                    </div>
+                </div>
+                <div class="camera-controls">
+                    <button class="btn-camera" id="btnStartCamera">
+                        <span class="btn-icon">▶️</span>
+                        <span>Start Camera</span>
+                    </button>
+                    <button class="btn-camera" id="btnStopCamera" disabled>
+                        <span class="btn-icon">⏹️</span>
+                        <span>Stop</span>
+                    </button>
+                    <button class="btn-camera btn-detect" id="btnDetect" disabled>
+                        <span class="btn-icon">🔍</span>
+                        <span>Detect</span>
+                    </button>
+                </div>
+                <div class="detected-objects" id="detectedObjects">
+                    <h3>Detected Objects</h3>
+                    <div class="objects-list" id="objectsList">
+                        <p class="no-objects">No objects detected</p>
+                    </div>
+                </div>
+                <div class="pick-place-controls" id="pickPlaceControls" style="display: none;">
+                    <h3>Pick & Place</h3>
+                    <div class="target-position">
+                        <label>Drop Target:</label>
+                        <div class="target-inputs">
+                            <input type="number" id="dropX" value="50" placeholder="X">
+                            <input type="number" id="dropY" value="0" placeholder="Y">
+                            <input type="number" id="dropZ" value="10" placeholder="Z">
+                        </div>
+                    </div>
+                    <button class="btn-action btn-pick" id="btnPickPlace" disabled>
+                        <span class="btn-icon">🤖</span>
+                        <span class="btn-text">Execute Pick & Place</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Control Row: XYZ + Quick Actions -->
+            <div class="control-row">
+                <!-- XYZ Control Panel -->
+                <section class="control-panel glass-panel">
+                    <h2><span class="icon">🎮</span> XYZ Coordinates</h2>
+
+                    <div class="coordinate-controls">
+                        <!-- X Axis -->
+                        <div class="axis-control" data-axis="x">
+                            <div class="axis-header">
+                                <span class="axis-label x-axis">X AXIS</span>
+                                <span class="axis-value" id="xValue">0</span>
+                                <span class="axis-unit">mm</span>
+                            </div>
+                            <div class="slider-container">
+                                <button class="btn-adjust minus" data-axis="x" data-dir="-1">−</button>
+                                <input type="range" id="xSlider" class="slider x-slider" min="-100" max="100" value="0">
+                                <button class="btn-adjust plus" data-axis="x" data-dir="1">+</button>
+                            </div>
+                            <input type="number" id="xInput" class="axis-input" value="0" min="-100" max="100">
+                        </div>
+
+                        <!-- Y Axis -->
+                        <div class="axis-control" data-axis="y">
+                            <div class="axis-header">
+                                <span class="axis-label y-axis">Y AXIS</span>
+                                <span class="axis-value" id="yValue">0</span>
+                                <span class="axis-unit">mm</span>
+                            </div>
+                            <div class="slider-container">
+                                <button class="btn-adjust minus" data-axis="y" data-dir="-1">−</button>
+                                <input type="range" id="ySlider" class="slider y-slider" min="-100" max="100" value="0">
+                                <button class="btn-adjust plus" data-axis="y" data-dir="1">+</button>
+                            </div>
+                            <input type="number" id="yInput" class="axis-input" value="0" min="-100" max="100">
+                        </div>
+
+                        <!-- Z Axis -->
+                        <div class="axis-control" data-axis="z">
+                            <div class="axis-header">
+                                <span class="axis-label z-axis">Z AXIS</span>
+                                <span class="axis-value" id="zValue">0</span>
+                                <span class="axis-unit">mm</span>
+                            </div>
+                            <div class="slider-container">
+                                <button class="btn-adjust minus" data-axis="z" data-dir="-1">−</button>
+                                <input type="range" id="zSlider" class="slider z-slider" min="0" max="150" value="50">
+                                <button class="btn-adjust plus" data-axis="z" data-dir="1">+</button>
+                            </div>
+                            <input type="number" id="zInput" class="axis-input" value="50" min="0" max="150">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Actions -->
+                <section class="actions-panel glass-panel">
+                    <h2><span class="icon">⚡</span> Quick Actions</h2>
+                    <div class="action-buttons">
+                        <button class="btn-action btn-home" id="btnHome">
+                            <span class="btn-icon">🏠</span>
+                            <span class="btn-text">HOME</span>
+                        </button>
+                        <button class="btn-action btn-grab" id="btnGrab">
+                            <span class="btn-icon">✊</span>
+                            <span class="btn-text">GRAB</span>
+                        </button>
+                        <button class="btn-action btn-release" id="btnRelease">
+                            <span class="btn-icon">🖐️</span>
+                            <span class="btn-text">RELEASE</span>
+                        </button>
+                        <button class="btn-action btn-stop" id="btnStop">
+                            <span class="btn-icon">🛑</span>
+                            <span class="btn-text">STOP</span>
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Servo Monitor -->
+            <section class="servo-panel glass-panel">
+                <h2><span class="icon">⚙️</span> Servo Angles</h2>
+                <div class="servo-monitors">
+                    <div class="servo-item" data-servo="1">
+                        <div class="servo-gauge-wrapper">
+                            <svg viewBox="0 0 120 120" class="gauge-svg-circle">
+                                <!-- Background circle -->
+                                <circle cx="60" cy="60" r="50" class="gauge-track" />
+                                <!-- Progress arc -->
+                                <circle cx="60" cy="60" r="50" class="gauge-progress" id="servo1Gauge" />
+                                <!-- Center decoration -->
+                                <circle cx="60" cy="60" r="35" class="gauge-inner" />
+                                <circle cx="60" cy="60" r="30" class="gauge-center" />
+                            </svg>
+                            <div class="servo-value-display">
+                                <span class="servo-angle" id="servo1Value">90</span>
+                                <span class="servo-deg">°</span>
+                            </div>
+                        </div>
+                        <div class="servo-info">
+                            <span class="servo-name">BASE</span>
+                            <span class="servo-id">S1</span>
+                        </div>
+                    </div>
+                    <div class="servo-item" data-servo="2">
+                        <div class="servo-gauge-wrapper">
+                            <svg viewBox="0 0 120 120" class="gauge-svg-circle">
+                                <circle cx="60" cy="60" r="50" class="gauge-track" />
+                                <circle cx="60" cy="60" r="50" class="gauge-progress gauge-progress-2"
+                                    id="servo2Gauge" />
+                                <circle cx="60" cy="60" r="35" class="gauge-inner gauge-inner-2" />
+                                <circle cx="60" cy="60" r="30" class="gauge-center" />
+                            </svg>
+                            <div class="servo-value-display">
+                                <span class="servo-angle" id="servo2Value">90</span>
+                                <span class="servo-deg">°</span>
+                            </div>
+                        </div>
+                        <div class="servo-info">
+                            <span class="servo-name">SHOULDER</span>
+                            <span class="servo-id">S2</span>
+                        </div>
+                    </div>
+                    <div class="servo-item" data-servo="3">
+                        <div class="servo-gauge-wrapper">
+                            <svg viewBox="0 0 120 120" class="gauge-svg-circle">
+                                <circle cx="60" cy="60" r="50" class="gauge-track" />
+                                <circle cx="60" cy="60" r="50" class="gauge-progress gauge-progress-3"
+                                    id="servo3Gauge" />
+                                <circle cx="60" cy="60" r="35" class="gauge-inner gauge-inner-3" />
+                                <circle cx="60" cy="60" r="30" class="gauge-center" />
+                            </svg>
+                            <div class="servo-value-display">
+                                <span class="servo-angle" id="servo3Value">90</span>
+                                <span class="servo-deg">°</span>
+                            </div>
+                        </div>
+                        <div class="servo-info">
+                            <span class="servo-name">ELBOW</span>
+                            <span class="servo-id">S3</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Connection Settings -->
+            <section class="settings-panel glass-panel">
+                <h2><span class="icon">📡</span> Connection</h2>
+                <div class="connection-form">
+                    <div class="input-group">
+                        <label for="espIP">ESP32 IP Address</label>
+                        <input type="text" id="espIP" value="192.168.4.1" placeholder="192.168.4.1">
+                    </div>
+                    <div class="input-group">
+                        <label for="wsPort">WebSocket Port</label>
+                        <input type="number" id="wsPort" value="81" placeholder="81">
+                    </div>
+                    <button class="btn-connect" id="btnConnect">
+                        <span class="btn-icon">🔌</span>
+                        <span>CONNECT</span>
+                    </button>
+                </div>
+                <div class="connection-info">
+                    <p>💡 เชื่อมต่อ WiFi ไปที่ <strong>RobotArm_AP</strong></p>
+                    <p>🔑 Password: <strong>12345678</strong></p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>🤖 ESP32 Robot Arm Controller | WebSocket Control System</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
