@@ -1224,3 +1224,91 @@ body {
 .glass-panel:nth-child(5) {
     animation-delay: 0.5s;
 }
+
+/* ArUco Calibration Panel */
+.aruco-panel {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+    border: 1px solid rgba(255, 165, 0, 0.2);
+}
+
+.aruco-panel h3 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    color: var(--accent-yellow);
+    margin-bottom: var(--spacing-xs);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.aruco-panel h3 .icon {
+    font-size: 1rem;
+}
+
+.aruco-status {
+    margin-bottom: var(--spacing-sm);
+}
+
+.aruco-status .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.aruco-status .status-row:last-child {
+    border-bottom: none;
+}
+
+.aruco-status .status-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.aruco-status .status-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.aruco-status .status-value.calibrated {
+    color: var(--accent-green);
+}
+
+.aruco-status .status-value.not-calibrated {
+    color: var(--accent-yellow);
+}
+
+.aruco-controls {
+    margin-bottom: var(--spacing-xs);
+}
+
+.btn-aruco {
+    background: linear-gradient(135deg, #ff9500, #ff6b00);
+    color: #000;
+    font-weight: bold;
+}
+
+.btn-aruco:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ffaa33, #ff8833);
+}
+
+.btn-aruco.calibrated {
+    background: linear-gradient(135deg, var(--accent-green), #00cc66);
+}
+
+.aruco-info {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.aruco-info p {
+    margin: 0;
+    padding: 4px 0;
+}

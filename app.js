@@ -1169,8 +1169,130 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ============================================
+// ArUco Calibration
+// ============================================
+const arucoState = {
+    isCalibrated: false,
+    markersDetected: 0,
+    lastCalibration: null
+};
+
+async function checkArucoStatus() {
+    try {
+        const response = await fetch(`${CONFIG.DETECTION_SERVER}/aruco/status`);
+        const data = await response.json();
+
+        arucoState.isCalibrated = data.calibrated;
+        arucoState.markersDetected = data.markers_detected;
+        arucoState.lastCalibration = data.last_calibration;
+
+        updateArucoUI(data);
+    } catch (error) {
+        console.error('ArUco status check failed:', error);
+    }
+}
+
+function updateArucoUI(data) {
+    const calibStatusEl = document.getElementById('arucoCalibStatus');
+    const markerCountEl = document.getElementById('arucoMarkerCount');
+    const btnCalibrate = document.getElementById('btnCalibrateAruco');
+
+    if (!calibStatusEl || !markerCountEl || !btnCalibrate) return;
+
+    // Update status text
+    if (data.calibrated) {
+        calibStatusEl.textContent = 'Calibrated ✓';
+        calibStatusEl.classList.add('calibrated');
+        calibStatusEl.classList.remove('not-calibrated');
+        btnCalibrate.classList.add('calibrated');
+    } else {
+        calibStatusEl.textContent = 'Not Calibrated';
+        calibStatusEl.classList.remove('calibrated');
+        calibStatusEl.classList.add('not-calibrated');
+        btnCalibrate.classList.remove('calibrated');
+    }
+
+    // Update marker count
+    markerCountEl.textContent = `${data.markers_detected}/4`;
+    if (data.markers_detected >= 4) {
+        markerCountEl.style.color = 'var(--accent-green)';
+    } else if (data.markers_detected > 0) {
+        markerCountEl.style.color = 'var(--accent-yellow)';
+    } else {
+        markerCountEl.style.color = 'var(--text-muted)';
+    }
+}
+
+async function calibrateAruco() {
+    const btnCalibrate = document.getElementById('btnCalibrateAruco');
+    const originalText = btnCalibrate.innerHTML;
+
+    try {
+        btnCalibrate.innerHTML = '<span class="btn-icon">⏳</span><span>Calibrating...</span>';
+        btnCalibrate.disabled = true;
+
+        const response = await fetch(`${CONFIG.DETECTION_SERVER}/aruco/calibrate`);
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('ArUco calibration successful!', 'success');
+            arucoState.isCalibrated = true;
+            await checkArucoStatus();
+        } else {
+            showNotification(data.message || 'Calibration failed', 'error');
+            await checkArucoStatus();
+        }
+    } catch (error) {
+        console.error('Calibration error:', error);
+        showNotification('Calibration failed - is server running?', 'error');
+    } finally {
+        btnCalibrate.innerHTML = originalText;
+        btnCalibrate.disabled = !detectionState.isCameraActive;
+    }
+}
+
+function initArucoCalibration() {
+    const btnCalibrate = document.getElementById('btnCalibrateAruco');
+
+    if (btnCalibrate) {
+        btnCalibrate.addEventListener('click', calibrateAruco);
+    }
+
+    // Poll ArUco status when camera is active
+    setInterval(() => {
+        if (detectionState.isCameraActive) {
+            checkArucoStatus();
+        }
+    }, 2000);
+}
+
+// Update startCamera to enable ArUco button
+const originalStartCamera = startCamera;
+startCamera = async function () {
+    await originalStartCamera();
+    const btnCalibrate = document.getElementById('btnCalibrateAruco');
+    if (btnCalibrate) {
+        btnCalibrate.disabled = false;
+    }
+    // Initial status check
+    setTimeout(checkArucoStatus, 500);
+};
+
+// Update stopCamera to disable ArUco button  
+const originalStopCamera = stopCamera;
+stopCamera = function () {
+    originalStopCamera();
+    const btnCalibrate = document.getElementById('btnCalibrateAruco');
+    if (btnCalibrate) {
+        btnCalibrate.disabled = true;
+    }
+};
+
 // Start when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     init();
     initObjectDetection();
+    initArucoCalibration();
 });
+
