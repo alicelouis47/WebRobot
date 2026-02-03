@@ -1,13 +1,18 @@
 /*
- * ESP32 Robot Arm Controller
- * WebSocket-based XYZ control with 3 Servo motors
+ * ESP32 Robot Arm Controller for meArm
+ * WebSocket-based XYZ control with 4 Servo motors
+ * 
+ * Compatible with meArm Inverse Kinematics:
+ * - Receives servo angles calculated from XYZ coordinates by web frontend
+ * - Home position corresponds to meArm (0, 100, 50) mm
+ * - Ref: https://github.com/phenoptix/meArm-1
  * 
  * Hardware Setup:
  * - ESP32 Development Board
- * - Servo 1 (Base rotation): GPIO 13
- * - Servo 2 (Shoulder): GPIO 12
- * - Servo 3 (Elbow): GPIO 14
- * - (Optional) Gripper Servo: GPIO 27
+ * - Servo 1 (Base rotation): GPIO 13 - rotates left/right
+ * - Servo 2 (Shoulder): GPIO 12 - raises/lowers first arm segment
+ * - Servo 3 (Elbow): GPIO 14 - raises/lowers second arm segment  
+ * - Servo 4 (Gripper): GPIO 27 - opens/closes claw
  * 
  * Libraries Required:
  * - ESP32Servo (by Kevin Harrington)
