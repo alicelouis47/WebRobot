@@ -7,18 +7,31 @@
 // Configuration
 // ============================================
 const CONFIG = {
-    // Arm dimensions (in mm) - adjust based on your robot
-    ARM_LENGTH_1: 80,   // Shoulder to Elbow
-    ARM_LENGTH_2: 100,  // Elbow to End Effector
+    // meArm dimensions (in mm) - based on meArm specifications
+    ARM_LENGTH_1: 80,   // Shoulder to Elbow (L1)
+    ARM_LENGTH_2: 80,   // Elbow to End Effector (L2)
+    BASE_HEIGHT: 62,    // Height of shoulder pivot above ground
 
     // Servo limits
     SERVO_MIN: 0,
     SERVO_MAX: 180,
 
-    // Default positions
+    // Servo calibration offsets (adjust for your servos)
+    // Maps physical angle to servo PWM angle
+    BASE_OFFSET: 90,      // Servo angle when arm points forward (theta=0)
+    SHOULDER_OFFSET: 90,  // Servo angle for horizontal arm
+    ELBOW_OFFSET: 90,     // Servo angle for straight arm
+
+    // Default positions (meArm home: 0, 100, 50)
     DEFAULT_X: 0,
-    DEFAULT_Y: 0,
+    DEFAULT_Y: 100,
     DEFAULT_Z: 50,
+
+    // Workspace limits (mm)
+    WORKSPACE_MIN_R: 50,   // Minimum reach
+    WORKSPACE_MAX_R: 150,  // Maximum reach
+    WORKSPACE_MIN_Z: -20,  // Minimum height
+    WORKSPACE_MAX_Z: 140,  // Maximum height
 
     // WebSocket
     WS_RECONNECT_INTERVAL: 3000,
@@ -33,8 +46,8 @@ const CONFIG = {
 // ============================================
 const state = {
     x: 0,
-    y: 0,
-    z: 50,
+    y: 100,   // meArm home: Y = 100mm forward
+    z: 50,    // meArm home: Z = 50mm height
     servo1: 90,  // Base rotation
     servo2: 90,  // Shoulder
     servo3: 90,  // Elbow
@@ -512,71 +525,122 @@ class ArmVisualizer {
 }
 
 // ============================================
-// Inverse Kinematics
+// meArm Inverse Kinematics
+// Based on: https://github.com/phenoptix/meArm-1
+// Coordinates: X (left/right), Y (forward), Z (up)
+// Home position: (0, 100, 50)
 // ============================================
-function calculateServoAngles(x, y, z) {
-    // Simple 2D IK for a 2-link arm in the XZ plane
-    // Base rotation is determined by X and Y
 
-    // Servo 1: Base rotation (controls XY direction)
-    let baseAngle = Math.atan2(y, x) * 180 / Math.PI + 90;
-    baseAngle = clamp(baseAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
+/**
+ * Check if a position is reachable by the arm
+ * @param {number} x - X coordinate (left/right) in mm
+ * @param {number} y - Y coordinate (forward) in mm  
+ * @param {number} z - Z coordinate (up) in mm
+ * @returns {boolean} true if position is reachable
+ */
+function isReachable(x, y, z) {
+    const L1 = CONFIG.ARM_LENGTH_1;
+    const L2 = CONFIG.ARM_LENGTH_2;
 
     // Distance from base in XY plane
     const r = Math.sqrt(x * x + y * y);
 
-    // Height adjustment
-    const h = z;
+    // Distance to target in 3D (from shoulder pivot)
+    const d = Math.sqrt(r * r + z * z);
 
-    // Distance to target point
-    const d = Math.sqrt(r * r + h * h);
+    // Check reach limits
+    if (d > L1 + L2) return false;  // Too far
+    if (d < Math.abs(L1 - L2)) return false;  // Too close
+    if (r < 10) return false;  // Too close to base (singularity)
 
+    return true;
+}
+
+/**
+ * Calculate servo angles for meArm using inverse kinematics
+ * Based on meArm library from Phenoptix
+ * 
+ * @param {number} x - X coordinate (left/right) in mm from base center
+ * @param {number} y - Y coordinate (forward) in mm from base center
+ * @param {number} z - Z coordinate (height) in mm from ground
+ * @returns {Object} {servo1, servo2, servo3, reachable}
+ */
+function calculateServoAngles(x, y, z) {
     const L1 = CONFIG.ARM_LENGTH_1;
     const L2 = CONFIG.ARM_LENGTH_2;
 
-    // Check if target is reachable
-    if (d > L1 + L2) {
-        // Target too far, extend arm fully
-        const angle = Math.atan2(h, r) * 180 / Math.PI;
+    // === Base rotation (Servo 1) ===
+    // atan2(x, y) gives angle from Y axis (forward direction)
+    // meArm: positive X is left, positive Y is forward
+    let theta = Math.atan2(x, y);  // Radians, 0 when pointing forward
+
+    // Convert to servo angle: 90° = forward, <90° = right, >90° = left
+    let baseAngle = theta * 180 / Math.PI + CONFIG.BASE_OFFSET;
+    baseAngle = clamp(baseAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
+
+    // === Arm IK in the vertical plane ===
+    // Distance from base in XY plane (horizontal reach)
+    const r = Math.sqrt(x * x + y * y);
+
+    // Target height relative to shoulder pivot
+    const h = z;
+
+    // Distance from shoulder pivot to target
+    const d = Math.sqrt(r * r + h * h);
+
+    // Check reachability
+    if (!isReachable(x, y, z)) {
+        // Return extended position towards target
+        const angle = Math.atan2(h, r);
         return {
             servo1: Math.round(baseAngle),
-            servo2: Math.round(90 - angle),
-            servo3: 90
+            servo2: Math.round(CONFIG.SHOULDER_OFFSET - angle * 180 / Math.PI),
+            servo3: Math.round(CONFIG.ELBOW_OFFSET),
+            reachable: false
         };
     }
 
-    if (d < Math.abs(L1 - L2)) {
-        // Target too close
-        return {
-            servo1: Math.round(baseAngle),
-            servo2: 90,
-            servo3: 180
-        };
-    }
+    // === Law of cosines for shoulder and elbow angles ===
+    // For a 2-link arm: L1 (shoulder to elbow), L2 (elbow to gripper)
 
-    // Calculate angles using law of cosines
-    const cosAngle2 = (d * d - L1 * L1 - L2 * L2) / (2 * L1 * L2);
-    const angle2 = Math.acos(clamp(cosAngle2, -1, 1));
+    // Elbow angle (angle between L1 and L2)
+    // cos(elbow) = (L1² + L2² - d²) / (2*L1*L2)
+    const cosElbow = (L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2);
+    const elbowAngleRad = Math.acos(clamp(cosElbow, -1, 1));
 
-    const cosAngle1 = (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d);
-    const angle1 = Math.acos(clamp(cosAngle1, -1, 1));
+    // Shoulder angle components:
+    // 1. Angle to target from horizontal: atan2(h, r)
+    // 2. Angle between L1 and line to target
+    const cosAlpha = (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d);
+    const alpha = Math.acos(clamp(cosAlpha, -1, 1));
+    const beta = Math.atan2(h, r);  // Elevation to target
 
-    const baseElevation = Math.atan2(h, r);
+    // Shoulder servo angle
+    // When arm is horizontal pointing forward, shoulder angle = 0
+    // Servo 90° = horizontal, increasing = up
+    let shoulderAngleRad = beta + alpha;
+    let shoulderAngle = CONFIG.SHOULDER_OFFSET - shoulderAngleRad * 180 / Math.PI;
 
-    // Convert to servo angles
-    let shoulderAngle = 90 - (baseElevation + angle1) * 180 / Math.PI;
-    let elbowAngle = 180 - angle2 * 180 / Math.PI;
+    // Elbow servo angle
+    // elbow angle is the internal angle, servo needs external
+    // When L1 and L2 are straight (180°), servo = 90°
+    let elbowAngle = CONFIG.ELBOW_OFFSET + (Math.PI - elbowAngleRad) * 180 / Math.PI;
 
+    // Clamp to servo limits
     shoulderAngle = clamp(shoulderAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
     elbowAngle = clamp(elbowAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
 
     return {
         servo1: Math.round(baseAngle),
         servo2: Math.round(shoulderAngle),
-        servo3: Math.round(elbowAngle)
+        servo3: Math.round(elbowAngle),
+        reachable: true
     };
 }
 
+/**
+ * Clamp a value between min and max
+ */
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
