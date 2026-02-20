@@ -44,7 +44,8 @@ const state = {
     servo1: 90,  // Joint0 - Waist (Base rotation)
     servo2: 90,  // Joint1 - Shoulder
     servo3: 90,  // Joint2 - Elbow
-    servo4: 90,  // Joint3 - Wrist/End
+    servo4: 90,  // Joint3 - Wrist/End [MG90s]
+    gripper: 90, // Gripper [MG90s]
     isConnected: false,
     ws: null,
     lastUpdate: 0
@@ -82,15 +83,17 @@ const elements = {
     currentY: document.getElementById('currentY'),
     currentZ: document.getElementById('currentZ'),
 
-    // Servo displays (Joint0-Joint3)
+    // Servo displays (Joint0-Joint3 + Gripper)
     servo1Value: document.getElementById('servo1Value'),
     servo2Value: document.getElementById('servo2Value'),
     servo3Value: document.getElementById('servo3Value'),
     servo4Value: document.getElementById('servo4Value'),
+    gripperValue: document.getElementById('gripperValue'),
     servo1Gauge: document.getElementById('servo1Gauge'),
     servo2Gauge: document.getElementById('servo2Gauge'),
     servo3Gauge: document.getElementById('servo3Gauge'),
     servo4Gauge: document.getElementById('servo4Gauge'),
+    gripperGauge: document.getElementById('gripperGauge'),
 
     // Connection
     connectionStatus: document.getElementById('connectionStatus'),
@@ -710,12 +713,13 @@ function updateConnectionStatus(connected) {
     }
 }
 
-function updateServoDisplay(servo1, servo2, servo3, servo4) {
+function updateServoDisplay(servo1, servo2, servo3, servo4, gripperAngle) {
     // Update text values (without degree symbol, it's in separate span now)
     elements.servo1Value.textContent = servo1;
     elements.servo2Value.textContent = servo2;
     elements.servo3Value.textContent = servo3;
     if (elements.servo4Value) elements.servo4Value.textContent = servo4;
+    if (elements.gripperValue) elements.gripperValue.textContent = gripperAngle;
 
     // Update circular gauge fills
     // Circle circumference = 2 * PI * r = 2 * 3.14159 * 50 ≈ 314
@@ -727,11 +731,13 @@ function updateServoDisplay(servo1, servo2, servo3, servo4) {
     const offset2 = circumference - (servo2 / 180) * circumference;
     const offset3 = circumference - (servo3 / 180) * circumference;
     const offset4 = circumference - (servo4 / 180) * circumference;
+    const offsetGripper = circumference - (gripperAngle / 180) * circumference;
 
     elements.servo1Gauge.style.strokeDashoffset = offset1;
     elements.servo2Gauge.style.strokeDashoffset = offset2;
     elements.servo3Gauge.style.strokeDashoffset = offset3;
     if (elements.servo4Gauge) elements.servo4Gauge.style.strokeDashoffset = offset4;
+    if (elements.gripperGauge) elements.gripperGauge.style.strokeDashoffset = offsetGripper;
 }
 
 function updatePositionDisplay(x, y, z) {
@@ -794,7 +800,7 @@ function updatePosition() {
 
     // Update displays
     updatePositionDisplay(state.x, state.y, state.z);
-    updateServoDisplay(state.servo1, state.servo2, state.servo3, state.servo4);
+    updateServoDisplay(state.servo1, state.servo2, state.servo3, state.servo4, state.gripper);
 
     // Update visualization
     visualizer.draw(state.x, state.y, state.z, state.servo1, state.servo2, state.servo3, state.servo4);

@@ -1,6 +1,6 @@
 # 🤖 ESP32 Robot Arm Controller
 
-ระบบควบคุมแขนกล 4 แกน (4-DOF) ผ่าน Web Interface โดยใช้ ESP32 และ Servo 4 ตัว ตามโครงสร้าง URDF
+ระบบควบคุมแขนกล 4 แกน (4-DOF) + Gripper ผ่าน Web Interface โดยใช้ ESP32 และ Servo 5 ตัว ตามโครงสร้าง URDF
 
 ![Robot Arm Control](https://img.shields.io/badge/ESP32-Robot%20Arm-blue?style=for-the-badge)
 ![WebSocket](https://img.shields.io/badge/Protocol-WebSocket-green?style=for-the-badge)
@@ -22,12 +22,13 @@
 
 แขนกลใช้โครงสร้างตาม URDF (`URDF_Robot_arm/urdf/ufdr.urdf`) มี 4 Joints:
 
-| Joint | ชื่อ | Axis | ความหมาย | GPIO |
-|-------|------|------|----------|------|
-| Joint0 | base_link → Link_1 | Y | **Waist** — หมุนฐาน | 13 |
-| Joint1 | Link_1 → Link_2 | Z | **Shoulder** — ไหล่ | 12 |
-| Joint2 | Link_2 → Link_3 | Z | **Elbow** — ข้อศอก | 14 |
-| Joint3 | Link_3 → End | X | **Wrist** — ข้อมือ | 27 |
+| Joint | ชื่อ URDF | Axis | ความหมาย | GPIO | Servo |
+|-------|-----------|------|----------|------|-------|
+| Joint0 | base_link → Link_1 | Y | **Waist** — หมุนฐาน | 13 | SG90 |
+| Joint1 | Link_1 → Link_2 | Z | **Shoulder** — ไหล่ | 12 | SG90 |
+| Joint2 | Link_2 → Link_3 | Z | **Elbow** — ข้อศอก | 14 | SG90 |
+| Joint3 | Link_3 → End | X | **Wrist** — ข้อมือ | 27 | **MG90s** |
+| — | — | — | **Gripper** — จับ/ปล่อย | 26 | **MG90s** |
 
 ### Arm Dimensions (จาก URDF)
 
@@ -43,7 +44,8 @@
 | Component | Specification |
 |-----------|--------------|
 | Microcontroller | ESP32 DevKit |
-| Servo Motors | SG90 or MG996R × **4** |
+| Servo Motors | SG90 × 3 (Waist, Shoulder, Elbow) |
+| Servo Motors | **MG90s** × 2 (Wrist, Gripper) |
 | USB Webcam | สำหรับ Object Detection (optional) |
 | Power Supply | 5V 2A (สำหรับ Servo) |
 | Jumper Wires | ตามความเหมาะสม |
@@ -51,12 +53,13 @@
 ### Wiring Diagram
 
 ```
-ESP32 Pin   ->   Servo            URDF Joint
-----------------------------------------------
-GPIO 13     ->   Servo 1          Joint0 (Waist)
-GPIO 12     ->   Servo 2          Joint1 (Shoulder)
-GPIO 14     ->   Servo 3          Joint2 (Elbow)
-GPIO 27     ->   Servo 4          Joint3 (Wrist)
+ESP32 Pin   ->   Servo            URDF Joint       Type
+----------------------------------------------------------
+GPIO 13     ->   Servo 1          Joint0 (Waist)   SG90
+GPIO 12     ->   Servo 2          Joint1 (Shoulder) SG90
+GPIO 14     ->   Servo 3          Joint2 (Elbow)   SG90
+GPIO 27     ->   Servo 4          Joint3 (Wrist)   MG90s
+GPIO 26     ->   Servo 5          Gripper          MG90s
 5V          ->   Servo VCC        (ใช้ External Power)
 GND         ->   Servo GND
 ```
@@ -118,7 +121,8 @@ Server จะเริ่มที่ `http://localhost:5000` พร้อม AP
 | J0 (Cyan) | Waist | หมุนฐาน 0°–180° |
 | J1 (Magenta) | Shoulder | ยกไหล่ 0°–180° |
 | J2 (Green) | Elbow | งอข้อศอก 0°–180° |
-| J3 (Orange) | Wrist | หมุนข้อมือ 0°–180° |
+| J3 (Orange) | Wrist | หมุนข้อมือ 0°–180° [MG90s] |
+| GRP (Pink) | Gripper | จับ/ปล่อย 0°–180° [MG90s] |
 
 ### Quick Actions
 
@@ -139,7 +143,7 @@ WebRobot/
 ├── README.md               # คู่มือการใช้งาน
 ├── yolo11n.pt              # YOLOv11 model weights
 ├── esp32/
-│   └── esp32_robot_arm.ino # Firmware ESP32 (4 servos, URDF joints)
+│   └── esp32_robot_arm.ino # Firmware ESP32 (4 joints + gripper, MG90s)
 ├── server/
 │   ├── app.py              # Flask server - Object Detection & ArUco
 │   └── requirements.txt    # Python dependencies
@@ -183,7 +187,7 @@ const char* STA_PASSWORD = "YourWiFiPassword";
 {"type": "move", "x": 50, "y": 30, "z": 80, "s1": 120, "s2": 85, "s3": 95, "s4": 90}
 
 // Status response (ส่งจาก ESP32 → Web)
-{"type": "status", "s1": 120, "s2": 85, "s3": 95, "s4": 90}
+{"type": "status", "s1": 120, "s2": 85, "s3": 95, "s4": 90, "gripper": 90}
 ```
 
 ## 📝 License
