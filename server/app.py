@@ -49,19 +49,23 @@ CONFIG = {
     # ArUco Marker Configuration
     'aruco_dict_type': cv2.aruco.DICT_4X4_50,
     'marker_size_mm': 30,     # Physical marker size in mm
-    # Expected marker IDs at workspace corners (ID: position)
-    # Arrange markers like this:
-    #   [0]-------[1]
+    # Expected marker IDs based on user diagram:
+    #   [1]-------[3]  <- Top edge (Y cm ปรับได้)
     #    |         |
     #    |         |
-    #   [3]-------[2]
+    #   [0]-------[2]
+    #               \--- X cm ปรับได้ --- (0,0)
     'marker_ids': [0, 1, 2, 3],
+    
     # Real-world coordinates of marker centers (mm) relative to robot base
+    # Robot is at (0,0). X axis is Forward, Y axis is Left.
+    # offset_x = distance to board ("X cm"), size_y = size of board ("Y cm")
+    # Setting defaults: X = 5cm (50mm), Y = 16cm (160mm)
     'marker_real_coords': {
-        0: (-80, 120),   # Top-left
-        1: (80, 120),    # Top-right
-        2: (80, 40),     # Bottom-right
-        3: (-80, 40),    # Bottom-left
+        0: (50 + 160, 160/2),    # Bottom-Left in diagram -> Furthest Left
+        1: (50 + 160, -160/2),   # Top-Left in diagram -> Furthest Right
+        2: (50, 160/2),          # Bottom-Right in diagram -> Closest Left
+        3: (50, -160/2),         # Top-Right in diagram -> Closest Right
     },
 }
 
