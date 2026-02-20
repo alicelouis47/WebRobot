@@ -1335,5 +1335,35 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
     initObjectDetection();
     initArucoCalibration();
+    initPasswordToggle();
 });
 
+// ============================================
+// WiFi Password Show/Hide Toggle
+// ============================================
+function initPasswordToggle() {
+    const btnToggle = document.getElementById('btnTogglePassword');
+    const passwordEl = document.getElementById('wifiPassword');
+    const eyeOpen = document.getElementById('eyeOpen');
+    const eyeClosed = document.getElementById('eyeClosed');
+
+    if (!btnToggle || !passwordEl) return;
+
+    const actualPassword = '12345678';
+    let isVisible = false;
+
+    btnToggle.addEventListener('click', () => {
+        isVisible = !isVisible;
+        if (isVisible) {
+            passwordEl.textContent = actualPassword;
+            passwordEl.classList.remove('password-masked');
+            eyeOpen.style.display = 'none';
+            eyeClosed.style.display = 'block';
+        } else {
+            passwordEl.textContent = '••••••••';
+            passwordEl.classList.add('password-masked');
+            eyeOpen.style.display = 'block';
+            eyeClosed.style.display = 'none';
+        }
+    });
+}

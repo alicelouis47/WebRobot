@@ -1346,3 +1346,38 @@ body {
     margin: 0;
     padding: 4px 0;
 }
+
+/* WiFi Password Toggle */
+.wifi-password-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-toggle-password {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.btn-toggle-password:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+}
+
+.password-masked {
+    letter-spacing: 2px;
+    font-size: 0.9rem;
+}
