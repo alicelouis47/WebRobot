@@ -897,6 +897,11 @@ body {
     filter: drop-shadow(0 0 8px var(--accent-green));
 }
 
+.gauge-progress-4 {
+    stroke: #ffaa00;
+    filter: drop-shadow(0 0 8px #ffaa00);
+}
+
 .gauge-inner {
     fill: none;
     stroke: rgba(0, 240, 255, 0.15);
@@ -909,6 +914,10 @@ body {
 
 .gauge-inner-3 {
     stroke: rgba(0, 255, 136, 0.15);
+}
+
+.gauge-inner-4 {
+    stroke: rgba(255, 170, 0, 0.15);
 }
 
 .gauge-center {
@@ -981,6 +990,10 @@ body {
     color: var(--accent-green);
 }
 
+.servo-item[data-servo="4"] .servo-angle {
+    color: #ffaa00;
+}
+
 .servo-item[data-servo="1"] .servo-id {
     border: 1px solid rgba(0, 240, 255, 0.3);
 }
@@ -991,6 +1004,10 @@ body {
 
 .servo-item[data-servo="3"] .servo-id {
     border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.servo-item[data-servo="4"] .servo-id {
+    border: 1px solid rgba(255, 170, 0, 0.3);
 }
 
 /* Action Buttons */

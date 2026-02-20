@@ -1,13 +1,14 @@
 /*
  * ESP32 Robot Arm Controller
- * WebSocket-based XYZ control with 3 Servo motors
+ * WebSocket-based XYZ control with 4 Servo motors
+ * Based on URDF_Robot_Arm (ufdr.urdf) specifications
  * 
  * Hardware Setup:
  * - ESP32 Development Board
- * - Servo 1 (Base rotation): GPIO 13
- * - Servo 2 (Shoulder): GPIO 12
- * - Servo 3 (Elbow): GPIO 14
- * - (Optional) Gripper Servo: GPIO 27
+ * - Servo 1 / Joint0 (Waist/Base rotation): GPIO 13
+ * - Servo 2 / Joint1 (Shoulder): GPIO 12
+ * - Servo 3 / Joint2 (Elbow): GPIO 14
+ * - Servo 4 / Joint3 (Wrist/End): GPIO 27
  * 
  * Libraries Required:
  * - ESP32Servo (by Kevin Harrington)
@@ -37,11 +38,11 @@ const char* AP_PASSWORD = "12345678";
 // WebSocket Port
 const int WS_PORT = 81;
 
-// Servo Pin Assignments
-const int SERVO1_PIN = 13;  // Base rotation
-const int SERVO2_PIN = 12;  // Shoulder
-const int SERVO3_PIN = 14;  // Elbow
-const int GRIPPER_PIN = 27; // Gripper (optional)
+// Servo Pin Assignments (matching URDF joints)
+const int SERVO1_PIN = 13;  // Joint0 - Waist (Base rotation)
+const int SERVO2_PIN = 12;  // Joint1 - Shoulder
+const int SERVO3_PIN = 14;  // Joint2 - Elbow
+const int SERVO4_PIN = 27;  // Joint3 - Wrist/End
 
 // Servo Limits
 const int SERVO_MIN_ANGLE = 0;
@@ -56,21 +57,22 @@ const bool SMOOTH_MOVEMENT = true;
 // ============================================
 
 WebSocketsServer webSocket = WebSocketsServer(WS_PORT);
-Servo servo1;  // Base
-Servo servo2;  // Shoulder
-Servo servo3;  // Elbow
-Servo gripper; // Gripper
+Servo servo1;  // Joint0 - Waist
+Servo servo2;  // Joint1 - Shoulder
+Servo servo3;  // Joint2 - Elbow
+Servo servo4;  // Joint3 - Wrist/End
 
 // Current positions
-int currentS1 = 90;
-int currentS2 = 90;
-int currentS3 = 90;
-int currentGripper = 90;
+int currentS1 = 90;  // Joint0
+int currentS2 = 90;  // Joint1
+int currentS3 = 90;  // Joint2
+int currentS4 = 90;  // Joint3
 
 // Target positions
 int targetS1 = 90;
 int targetS2 = 90;
 int targetS3 = 90;
+int targetS4 = 90;
 
 // Status flags
 bool stopFlag = false;
@@ -207,18 +209,18 @@ void setupServos() {
     servo1.setPeriodHertz(50);
     servo2.setPeriodHertz(50);
     servo3.setPeriodHertz(50);
-    gripper.setPeriodHertz(50);
+    servo4.setPeriodHertz(50);
     
     servo1.attach(SERVO1_PIN, 500, 2400);
     servo2.attach(SERVO2_PIN, 500, 2400);
     servo3.attach(SERVO3_PIN, 500, 2400);
-    gripper.attach(GRIPPER_PIN, 500, 2400);
+    servo4.attach(SERVO4_PIN, 500, 2400);
     
-    Serial.println("Servos initialized:");
-    Serial.println("  Servo1 (Base): GPIO " + String(SERVO1_PIN));
-    Serial.println("  Servo2 (Shoulder): GPIO " + String(SERVO2_PIN));
-    Serial.println("  Servo3 (Elbow): GPIO " + String(SERVO3_PIN));
-    Serial.println("  Gripper: GPIO " + String(GRIPPER_PIN));
+    Serial.println("Servos initialized (URDF joints):");
+    Serial.println("  Joint0 (Waist):    GPIO " + String(SERVO1_PIN));
+    Serial.println("  Joint1 (Shoulder): GPIO " + String(SERVO2_PIN));
+    Serial.println("  Joint2 (Elbow):    GPIO " + String(SERVO3_PIN));
+    Serial.println("  Joint3 (Wrist):    GPIO " + String(SERVO4_PIN));
 }
 
 // ============================================
@@ -276,19 +278,22 @@ void handleCommand(uint8_t num, const char* payload) {
         stopFlag = false;
         
         if (doc.containsKey("s1")) {
-            targetS1 = constrainAngle(doc["s1"]);
+            targetS1 = constrainAngle(doc["s1"]);  // Joint0
         }
         if (doc.containsKey("s2")) {
-            targetS2 = constrainAngle(doc["s2"]);
+            targetS2 = constrainAngle(doc["s2"]);  // Joint1
         }
         if (doc.containsKey("s3")) {
-            targetS3 = constrainAngle(doc["s3"]);
+            targetS3 = constrainAngle(doc["s3"]);  // Joint2
+        }
+        if (doc.containsKey("s4")) {
+            targetS4 = constrainAngle(doc["s4"]);  // Joint3
         }
         
-        Serial.printf("Target: S1=%d, S2=%d, S3=%d\n", targetS1, targetS2, targetS3);
+        Serial.printf("Target: J0=%d, J1=%d, J2=%d, J3=%d\n", targetS1, targetS2, targetS3, targetS4);
         
         if (!SMOOTH_MOVEMENT) {
-            moveToPosition(targetS1, targetS2, targetS3);
+            moveToPosition(targetS1, targetS2, targetS3, targetS4);
         }
     }
     else if (strcmp(type, "home") == 0) {
@@ -297,14 +302,14 @@ void handleCommand(uint8_t num, const char* payload) {
         homePosition();
     }
     else if (strcmp(type, "grab") == 0) {
-        Serial.println("Gripper: CLOSE");
-        gripper.write(30);
-        currentGripper = 30;
+        Serial.println("Wrist/End: GRAB (close)");
+        servo4.write(30);
+        currentS4 = 30;
     }
     else if (strcmp(type, "release") == 0) {
-        Serial.println("Gripper: OPEN");
-        gripper.write(120);
-        currentGripper = 120;
+        Serial.println("Wrist/End: RELEASE (open)");
+        servo4.write(120);
+        currentS4 = 120;
     }
     else if (strcmp(type, "stop") == 0) {
         Serial.println("EMERGENCY STOP!");
@@ -312,6 +317,7 @@ void handleCommand(uint8_t num, const char* payload) {
         targetS1 = currentS1;
         targetS2 = currentS2;
         targetS3 = currentS3;
+        targetS4 = currentS4;
     }
     else if (strcmp(type, "setServo") == 0) {
         // Direct servo control
@@ -319,17 +325,21 @@ void handleCommand(uint8_t num, const char* payload) {
         int angle = constrainAngle(doc["angle"]);
         
         switch(servoNum) {
-            case 1:
+            case 1:  // Joint0
                 targetS1 = angle;
                 if (!SMOOTH_MOVEMENT) servo1.write(angle);
                 break;
-            case 2:
+            case 2:  // Joint1
                 targetS2 = angle;
                 if (!SMOOTH_MOVEMENT) servo2.write(angle);
                 break;
-            case 3:
+            case 3:  // Joint2
                 targetS3 = angle;
                 if (!SMOOTH_MOVEMENT) servo3.write(angle);
+                break;
+            case 4:  // Joint3
+                targetS4 = angle;
+                if (!SMOOTH_MOVEMENT) servo4.write(angle);
                 break;
         }
     }
@@ -362,31 +372,40 @@ void updateServoPositions() {
         servo3.write(currentS3);
     }
     
+    if (currentS4 != targetS4) {
+        if (currentS4 < targetS4) currentS4++;
+        else currentS4--;
+        servo4.write(currentS4);
+    }
+    
     // Small delay for smooth movement
-    if (currentS1 != targetS1 || currentS2 != targetS2 || currentS3 != targetS3) {
+    if (currentS1 != targetS1 || currentS2 != targetS2 || currentS3 != targetS3 || currentS4 != targetS4) {
         delay(SERVO_STEP_DELAY);
     }
 }
 
-void moveToPosition(int s1, int s2, int s3) {
-    Serial.printf("Moving to: S1=%d, S2=%d, S3=%d\n", s1, s2, s3);
+void moveToPosition(int s1, int s2, int s3, int s4) {
+    Serial.printf("Moving to: J0=%d, J1=%d, J2=%d, J3=%d\n", s1, s2, s3, s4);
     
     servo1.write(s1);
     servo2.write(s2);
     servo3.write(s3);
+    servo4.write(s4);
     
     currentS1 = s1;
     currentS2 = s2;
     currentS3 = s3;
+    currentS4 = s4;
 }
 
 void homePosition() {
-    targetS1 = 90;
-    targetS2 = 90;
-    targetS3 = 90;
+    targetS1 = 90;  // Joint0
+    targetS2 = 90;  // Joint1
+    targetS3 = 90;  // Joint2
+    targetS4 = 90;  // Joint3
     
     if (!SMOOTH_MOVEMENT) {
-        moveToPosition(90, 90, 90);
+        moveToPosition(90, 90, 90, 90);
     }
     
     Serial.println("HOME position set");
@@ -406,10 +425,10 @@ void sendStatus(uint8_t num) {
     StaticJsonDocument<256> doc;
     
     doc["type"] = "status";
-    doc["s1"] = currentS1;
-    doc["s2"] = currentS2;
-    doc["s3"] = currentS3;
-    doc["gripper"] = currentGripper;
+    doc["s1"] = currentS1;  // Joint0
+    doc["s2"] = currentS2;  // Joint1
+    doc["s3"] = currentS3;  // Joint2
+    doc["s4"] = currentS4;  // Joint3
     doc["stopFlag"] = stopFlag;
     
     String output;
@@ -422,10 +441,10 @@ void broadcastStatus() {
     StaticJsonDocument<256> doc;
     
     doc["type"] = "status";
-    doc["s1"] = currentS1;
-    doc["s2"] = currentS2;
-    doc["s3"] = currentS3;
-    doc["gripper"] = currentGripper;
+    doc["s1"] = currentS1;  // Joint0
+    doc["s2"] = currentS2;  // Joint1
+    doc["s3"] = currentS3;  // Joint2
+    doc["s4"] = currentS4;  // Joint3
     
     String output;
     serializeJson(doc, output);

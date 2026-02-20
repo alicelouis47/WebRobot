@@ -7,11 +7,17 @@
 // Configuration
 // ============================================
 const CONFIG = {
-    // Arm dimensions (in mm) - adjust based on your robot
-    ARM_LENGTH_1: 80,   // Shoulder to Elbow
-    ARM_LENGTH_2: 100,  // Elbow to End Effector
+    // Arm dimensions (in mm) - based on URDF_Robot_arm specs (ufdr.urdf)
+    // Joint0: base_link → Link_1, origin z=0.056m, axis Y (Base/Waist rotation)
+    // Joint1: Link_1 → Link_2, origin (0, 0.04028, -0.01391)m, axis Z (Shoulder)
+    // Joint2: Link_2 → Link_3, origin (0, -0.12, 0)m, axis Z (Elbow)
+    // Joint3: Link_3 → End, origin (0.11625, 0.0003, 0)m, axis X (Wrist/End)
+    BASE_HEIGHT: 56,        // Joint0 z-offset (mm)
+    SHOULDER_OFFSET: 42.6,  // Joint1 offset: sqrt(40.28² + 13.91²) (mm)
+    ARM_LENGTH_1: 120,      // Upper arm: Link_2 length - Joint2 origin y (mm)
+    ARM_LENGTH_2: 116.25,   // Forearm: Link_3 to End - Joint3 origin x (mm)
 
-    // Servo limits
+    // Servo limits (all joints 0-180°)
     SERVO_MIN: 0,
     SERVO_MAX: 180,
 
@@ -35,9 +41,10 @@ const state = {
     x: 0,
     y: 0,
     z: 50,
-    servo1: 90,  // Base rotation
-    servo2: 90,  // Shoulder
-    servo3: 90,  // Elbow
+    servo1: 90,  // Joint0 - Waist (Base rotation)
+    servo2: 90,  // Joint1 - Shoulder
+    servo3: 90,  // Joint2 - Elbow
+    servo4: 90,  // Joint3 - Wrist/End
     isConnected: false,
     ws: null,
     lastUpdate: 0
@@ -75,13 +82,15 @@ const elements = {
     currentY: document.getElementById('currentY'),
     currentZ: document.getElementById('currentZ'),
 
-    // Servo displays
+    // Servo displays (Joint0-Joint3)
     servo1Value: document.getElementById('servo1Value'),
     servo2Value: document.getElementById('servo2Value'),
     servo3Value: document.getElementById('servo3Value'),
+    servo4Value: document.getElementById('servo4Value'),
     servo1Gauge: document.getElementById('servo1Gauge'),
     servo2Gauge: document.getElementById('servo2Gauge'),
     servo3Gauge: document.getElementById('servo3Gauge'),
+    servo4Gauge: document.getElementById('servo4Gauge'),
 
     // Connection
     connectionStatus: document.getElementById('connectionStatus'),
@@ -107,8 +116,18 @@ class ArmVisualizer {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.currentView = 'side'; // side, top, front, 3d
+        this.scale = 1.0;
         this.resize();
         window.addEventListener('resize', () => this.resize());
+
+        // Zoom with mouse wheel
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            this.scale = Math.max(0.3, Math.min(5, this.scale * zoomFactor));
+            // Redraw with current state
+            this.draw(state.x, state.y, state.z, state.servo1, state.servo2, state.servo3);
+        }, { passive: false });
     }
 
     setView(view) {
@@ -121,18 +140,17 @@ class ArmVisualizer {
         this.canvas.height = 300;
         this.centerX = this.canvas.width / 2;
         this.centerY = this.canvas.height / 2;
-        this.scale = 1.5;
     }
 
-    draw(x, y, z, servo1, servo2, servo3) {
+    draw(x, y, z, servo1, servo2, servo3, servo4) {
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Draw grid
         this.drawGrid();
 
-        // Calculate 3D arm positions
-        const armPos = this.calculateArmPositions(x, y, z, servo1, servo2, servo3);
+        // Calculate 3D arm positions (4 joints from URDF)
+        const armPos = this.calculateArmPositions(x, y, z, servo1, servo2, servo3, servo4);
 
         // Draw based on current view
         switch (this.currentView) {
@@ -154,34 +172,36 @@ class ArmVisualizer {
         this.drawPositionIndicator(x, y, z);
     }
 
-    calculateArmPositions(x, y, z, servo1, servo2, servo3) {
-        // Calculate 3D positions of arm joints
-        const baseAngle = (servo1 - 90) * Math.PI / 180;
-        const shoulderAngle = (90 - servo2) * Math.PI / 180;
-        const elbowAngle = (90 - servo3) * Math.PI / 180;
+    calculateArmPositions(x, y, z, servo1, servo2, servo3, servo4) {
+        // Calculate 3D positions of arm joints based on URDF joint structure
+        // Joint0 (Waist): servo1, Joint1 (Shoulder): servo2
+        // Joint2 (Elbow): servo3, Joint3 (Wrist): servo4
+        const baseAngle = (servo1 - 90) * Math.PI / 180;     // Joint0 - Y axis
+        const shoulderAngle = (90 - servo2) * Math.PI / 180;  // Joint1 - Z axis
+        const elbowAngle = (90 - servo3) * Math.PI / 180;     // Joint2 - Z axis
 
-        const L1 = CONFIG.ARM_LENGTH_1;
-        const L2 = CONFIG.ARM_LENGTH_2;
+        const L1 = CONFIG.ARM_LENGTH_1;  // 120mm (Link_2)
+        const L2 = CONFIG.ARM_LENGTH_2;  // 116.25mm (Link_3 to End)
 
-        // Base is at origin
-        const base = { x: 0, y: 0, z: 0 };
+        // Base is at origin + base height (Joint0 z-offset)
+        const base = { x: 0, y: 0, z: CONFIG.BASE_HEIGHT };
 
-        // Shoulder joint position (after first arm segment)
-        const shoulder = {
+        // Elbow joint position (end of upper arm / Link_2)
+        const elbow = {
             x: Math.cos(baseAngle) * Math.cos(shoulderAngle) * L1,
             y: Math.sin(baseAngle) * Math.cos(shoulderAngle) * L1,
-            z: Math.sin(shoulderAngle) * L1
+            z: base.z + Math.sin(shoulderAngle) * L1
         };
 
-        // End effector position
+        // Wrist/End effector position (end of forearm / Link_3 to End)
         const totalAngle = shoulderAngle + elbowAngle - Math.PI / 2;
         const end = {
-            x: shoulder.x + Math.cos(baseAngle) * Math.cos(totalAngle) * L2,
-            y: shoulder.y + Math.sin(baseAngle) * Math.cos(totalAngle) * L2,
-            z: shoulder.z + Math.sin(totalAngle) * L2
+            x: elbow.x + Math.cos(baseAngle) * Math.cos(totalAngle) * L2,
+            y: elbow.y + Math.sin(baseAngle) * Math.cos(totalAngle) * L2,
+            z: elbow.z + Math.sin(totalAngle) * L2
         };
 
-        return { base, shoulder, end };
+        return { base, elbow, end };
     }
 
     // Side View (XZ Plane) - looking from Y axis
@@ -194,9 +214,9 @@ class ArmVisualizer {
 
         // Transform to screen coordinates
         const base = { x: this.centerX, y: baseY };
-        const shoulder = {
-            x: this.centerX + armPos.shoulder.x * this.scale,
-            y: baseY - armPos.shoulder.z * this.scale
+        const elbow = {
+            x: this.centerX + armPos.elbow.x * this.scale,
+            y: baseY - armPos.elbow.z * this.scale
         };
         const end = {
             x: this.centerX + armPos.end.x * this.scale,
@@ -204,11 +224,11 @@ class ArmVisualizer {
         };
 
         this.drawBaseCircle(base.x, base.y);
-        this.drawArmSegment(base.x, base.y, shoulder.x, shoulder.y, '#00f0ff', 12);
-        this.drawArmSegment(shoulder.x, shoulder.y, end.x, end.y, '#ff00aa', 10);
-        this.drawJoint(base.x, base.y, 15, '#00f0ff');
-        this.drawJoint(shoulder.x, shoulder.y, 12, '#ff00aa');
-        this.drawEndEffector(end.x, end.y);
+        this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);    // Upper arm (Link_2)
+        this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);      // Forearm (Link_3)
+        this.drawJoint(base.x, base.y, 15, '#00f0ff');     // Joint0 (Waist)
+        this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');   // Joint2 (Elbow)
+        this.drawEndEffector(end.x, end.y);                 // End effector
     }
 
     // Top View (XY Plane) - looking from Z axis (bird's eye)
@@ -220,9 +240,9 @@ class ArmVisualizer {
 
         // Transform to screen coordinates (X right, Y up on screen)
         const base = { x: this.centerX, y: this.centerY };
-        const shoulder = {
-            x: this.centerX + armPos.shoulder.x * this.scale,
-            y: this.centerY - armPos.shoulder.y * this.scale
+        const elbow = {
+            x: this.centerX + armPos.elbow.x * this.scale,
+            y: this.centerY - armPos.elbow.y * this.scale
         };
         const end = {
             x: this.centerX + armPos.end.x * this.scale,
@@ -233,10 +253,10 @@ class ArmVisualizer {
         this.drawRangeCircle(base.x, base.y, (CONFIG.ARM_LENGTH_1 + CONFIG.ARM_LENGTH_2) * this.scale);
 
         this.drawBaseCircle(base.x, base.y);
-        this.drawArmSegment(base.x, base.y, shoulder.x, shoulder.y, '#00f0ff', 12);
-        this.drawArmSegment(shoulder.x, shoulder.y, end.x, end.y, '#ff00aa', 10);
+        this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);
+        this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);
         this.drawJoint(base.x, base.y, 15, '#00f0ff');
-        this.drawJoint(shoulder.x, shoulder.y, 12, '#ff00aa');
+        this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');
         this.drawEndEffector(end.x, end.y);
     }
 
@@ -250,9 +270,9 @@ class ArmVisualizer {
 
         // Transform to screen coordinates
         const base = { x: this.centerX, y: baseY };
-        const shoulder = {
-            x: this.centerX + armPos.shoulder.y * this.scale,
-            y: baseY - armPos.shoulder.z * this.scale
+        const elbow = {
+            x: this.centerX + armPos.elbow.y * this.scale,
+            y: baseY - armPos.elbow.z * this.scale
         };
         const end = {
             x: this.centerX + armPos.end.y * this.scale,
@@ -260,10 +280,10 @@ class ArmVisualizer {
         };
 
         this.drawBaseCircle(base.x, base.y);
-        this.drawArmSegment(base.x, base.y, shoulder.x, shoulder.y, '#00f0ff', 12);
-        this.drawArmSegment(shoulder.x, shoulder.y, end.x, end.y, '#ff00aa', 10);
+        this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);
+        this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);
         this.drawJoint(base.x, base.y, 15, '#00f0ff');
-        this.drawJoint(shoulder.x, shoulder.y, 12, '#ff00aa');
+        this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');
         this.drawEndEffector(end.x, end.y);
     }
 
@@ -284,7 +304,7 @@ class ArmVisualizer {
         });
 
         const base = toIso(armPos.base);
-        const shoulder = toIso(armPos.shoulder);
+        const elbow = toIso(armPos.elbow);
         const end = toIso(armPos.end);
 
         // Draw 3D axes
@@ -294,10 +314,10 @@ class ArmVisualizer {
         this.drawGroundShadow(armPos, toIso);
 
         this.drawBaseCircle(base.x, base.y);
-        this.drawArmSegment(base.x, base.y, shoulder.x, shoulder.y, '#00f0ff', 12);
-        this.drawArmSegment(shoulder.x, shoulder.y, end.x, end.y, '#ff00aa', 10);
+        this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);
+        this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);
         this.drawJoint(base.x, base.y, 15, '#00f0ff');
-        this.drawJoint(shoulder.x, shoulder.y, 12, '#ff00aa');
+        this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');
         this.drawEndEffector(end.x, end.y);
     }
 
@@ -383,7 +403,7 @@ class ArmVisualizer {
 
         // Project arm onto ground (z=0)
         const base = toIso({ x: 0, y: 0, z: 0 });
-        const shoulder = toIso({ x: armPos.shoulder.x, y: armPos.shoulder.y, z: 0 });
+        const elbow = toIso({ x: armPos.elbow.x, y: armPos.elbow.y, z: 0 });
         const end = toIso({ x: armPos.end.x, y: armPos.end.y, z: 0 });
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
@@ -392,7 +412,7 @@ class ArmVisualizer {
 
         ctx.beginPath();
         ctx.moveTo(base.x, base.y);
-        ctx.lineTo(shoulder.x, shoulder.y);
+        ctx.lineTo(elbow.x, elbow.y);
         ctx.lineTo(end.x, end.y);
         ctx.stroke();
 
@@ -512,27 +532,29 @@ class ArmVisualizer {
 }
 
 // ============================================
-// Inverse Kinematics
+// Inverse Kinematics (based on URDF_Robot_Arm joints)
+// Joint0 (Waist) = servo1, Joint1 (Shoulder) = servo2
+// Joint2 (Elbow) = servo3, Joint3 (Wrist) = servo4
 // ============================================
 function calculateServoAngles(x, y, z) {
-    // Simple 2D IK for a 2-link arm in the XZ plane
-    // Base rotation is determined by X and Y
+    // 2-link planar IK in the vertical plane + base rotation
+    // Joint3 (Wrist) keeps end-effector level by default
 
-    // Servo 1: Base rotation (controls XY direction)
+    // Servo 1 / Joint0: Waist rotation (controls XY direction)
     let baseAngle = Math.atan2(y, x) * 180 / Math.PI + 90;
     baseAngle = clamp(baseAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
 
     // Distance from base in XY plane
     const r = Math.sqrt(x * x + y * y);
 
-    // Height adjustment
-    const h = z;
+    // Height adjustment (subtract base height and shoulder offset)
+    const h = z - CONFIG.BASE_HEIGHT - CONFIG.SHOULDER_OFFSET;
 
     // Distance to target point
     const d = Math.sqrt(r * r + h * h);
 
-    const L1 = CONFIG.ARM_LENGTH_1;
-    const L2 = CONFIG.ARM_LENGTH_2;
+    const L1 = CONFIG.ARM_LENGTH_1;  // 120mm  (Joint1 to Joint2)
+    const L2 = CONFIG.ARM_LENGTH_2;  // 116.25mm (Joint2 to Joint3/End)
 
     // Check if target is reachable
     if (d > L1 + L2) {
@@ -541,7 +563,8 @@ function calculateServoAngles(x, y, z) {
         return {
             servo1: Math.round(baseAngle),
             servo2: Math.round(90 - angle),
-            servo3: 90
+            servo3: 90,
+            servo4: 90  // Joint3 (Wrist) neutral
         };
     }
 
@@ -550,7 +573,8 @@ function calculateServoAngles(x, y, z) {
         return {
             servo1: Math.round(baseAngle),
             servo2: 90,
-            servo3: 180
+            servo3: 180,
+            servo4: 90  // Joint3 (Wrist) neutral
         };
     }
 
@@ -564,16 +588,22 @@ function calculateServoAngles(x, y, z) {
     const baseElevation = Math.atan2(h, r);
 
     // Convert to servo angles
-    let shoulderAngle = 90 - (baseElevation + angle1) * 180 / Math.PI;
-    let elbowAngle = 180 - angle2 * 180 / Math.PI;
+    let shoulderAngle = 90 - (baseElevation + angle1) * 180 / Math.PI;  // Joint1
+    let elbowAngle = 180 - angle2 * 180 / Math.PI;                      // Joint2
+
+    // Joint3 (Wrist): compensate to keep end-effector level
+    // wristAngle makes the end segment horizontal relative to ground
+    let wristAngle = 90 - (shoulderAngle - 90) - (elbowAngle - 90);
+    wristAngle = clamp(wristAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
 
     shoulderAngle = clamp(shoulderAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
     elbowAngle = clamp(elbowAngle, CONFIG.SERVO_MIN, CONFIG.SERVO_MAX);
 
     return {
-        servo1: Math.round(baseAngle),
-        servo2: Math.round(shoulderAngle),
-        servo3: Math.round(elbowAngle)
+        servo1: Math.round(baseAngle),      // Joint0 (Waist)
+        servo2: Math.round(shoulderAngle),   // Joint1 (Shoulder)
+        servo3: Math.round(elbowAngle),      // Joint2 (Elbow)
+        servo4: Math.round(wristAngle)       // Joint3 (Wrist)
     };
 }
 
@@ -680,11 +710,12 @@ function updateConnectionStatus(connected) {
     }
 }
 
-function updateServoDisplay(servo1, servo2, servo3) {
+function updateServoDisplay(servo1, servo2, servo3, servo4) {
     // Update text values (without degree symbol, it's in separate span now)
     elements.servo1Value.textContent = servo1;
     elements.servo2Value.textContent = servo2;
     elements.servo3Value.textContent = servo3;
+    if (elements.servo4Value) elements.servo4Value.textContent = servo4;
 
     // Update circular gauge fills
     // Circle circumference = 2 * PI * r = 2 * 3.14159 * 50 ≈ 314
@@ -695,10 +726,12 @@ function updateServoDisplay(servo1, servo2, servo3) {
     const offset1 = circumference - (servo1 / 180) * circumference;
     const offset2 = circumference - (servo2 / 180) * circumference;
     const offset3 = circumference - (servo3 / 180) * circumference;
+    const offset4 = circumference - (servo4 / 180) * circumference;
 
     elements.servo1Gauge.style.strokeDashoffset = offset1;
     elements.servo2Gauge.style.strokeDashoffset = offset2;
     elements.servo3Gauge.style.strokeDashoffset = offset3;
+    if (elements.servo4Gauge) elements.servo4Gauge.style.strokeDashoffset = offset4;
 }
 
 function updatePositionDisplay(x, y, z) {
@@ -752,28 +785,30 @@ function updatePosition() {
     state.y = parseInt(elements.ySlider.value);
     state.z = parseInt(elements.zSlider.value);
 
-    // Calculate servo angles
+    // Calculate servo angles (Joint0-Joint3)
     const angles = calculateServoAngles(state.x, state.y, state.z);
-    state.servo1 = angles.servo1;
-    state.servo2 = angles.servo2;
-    state.servo3 = angles.servo3;
+    state.servo1 = angles.servo1;  // Joint0 (Waist)
+    state.servo2 = angles.servo2;  // Joint1 (Shoulder)
+    state.servo3 = angles.servo3;  // Joint2 (Elbow)
+    state.servo4 = angles.servo4;  // Joint3 (Wrist)
 
     // Update displays
     updatePositionDisplay(state.x, state.y, state.z);
-    updateServoDisplay(state.servo1, state.servo2, state.servo3);
+    updateServoDisplay(state.servo1, state.servo2, state.servo3, state.servo4);
 
     // Update visualization
-    visualizer.draw(state.x, state.y, state.z, state.servo1, state.servo2, state.servo3);
+    visualizer.draw(state.x, state.y, state.z, state.servo1, state.servo2, state.servo3, state.servo4);
 
-    // Send to ESP32
+    // Send to ESP32 (all 4 servos)
     sendCommand({
         type: 'move',
         x: state.x,
         y: state.y,
         z: state.z,
-        s1: state.servo1,
-        s2: state.servo2,
-        s3: state.servo3
+        s1: state.servo1,  // Joint0
+        s2: state.servo2,  // Joint1
+        s3: state.servo3,  // Joint2
+        s4: state.servo4   // Joint3
     });
 }
 

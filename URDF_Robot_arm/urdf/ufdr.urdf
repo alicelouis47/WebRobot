@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="ufdr">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0.0010983 0.022114 1.4744E-09"
+        rpy="0 0 0" />
+      <mass
+        value="0.094484" />
+      <inertia
+        ixx="0.0001286"
+        ixy="3.834E-06"
+        ixz="-3.3704E-12"
+        iyy="0.0002053"
+        iyz="3.998E-13"
+        izz="0.00013468" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.1098 0.1098 0.1098 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link_1">
+    <inertial>
+      <origin
+        xyz="0.0080422 0.023883 -0.0048986"
+        rpy="0 0 0" />
+      <mass
+        value="0.085761" />
+      <inertia
+        ixx="9.2537E-05"
+        ixy="-7.9634E-06"
+        ixz="1.5539E-06"
+        iyy="7.0011E-05"
+        iyz="1.0779E-05"
+        izz="6.5726E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/Link_1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.10196 0.10196 0.10196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/Link_1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint0"
+    type="revolute">
+    <origin
+      xyz="0 0 0.056"
+      rpy="1.5708 0 1.6232" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_1" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_2">
+    <inertial>
+      <origin
+        xyz="3.979E-07 -0.06 -0.0038203"
+        rpy="0 0 0" />
+      <mass
+        value="0.064281" />
+      <inertia
+        ixx="0.00010383"
+        ixy="-5.0317E-10"
+        ixz="-8.5739E-10"
+        iyy="9.2898E-06"
+        iyz="2.5271E-10"
+        izz="0.00010871" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/Link_2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/Link_2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint1"
+    type="revolute">
+    <origin
+      xyz="0 0.04028 -0.01391"
+      rpy="-1.5708 -1.5563 -1.5708" />
+    <parent
+      link="Link_1" />
+    <child
+      link="Link_2" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link_3">
+    <inertial>
+      <origin
+        xyz="0.059939 -0.00019022 0.011231"
+        rpy="0 0 0" />
+      <mass
+        value="0.0624" />
+      <inertia
+        ixx="1.1141E-05"
+        ixy="5.556E-07"
+        ixz="2.5735E-07"
+        iyy="5.4296E-05"
+        iyz="-6.3943E-09"
+        izz="5.8726E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/Link_3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/Link_3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint2"
+    type="revolute">
+    <origin
+      xyz="0 -0.12 0"
+      rpy="0 0.00017994 -3.1329" />
+    <parent
+      link="Link_2" />
+    <child
+      link="Link_3" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="End">
+    <inertial>
+      <origin
+        xyz="-0.016425 -0.009747 0.042093"
+        rpy="0 0 0" />
+      <mass
+        value="0.042904" />
+      <inertia
+        ixx="1.1078E-05"
+        ixy="3.7415E-07"
+        ixz="-1.7567E-06"
+        iyy="1.3512E-05"
+        iyz="1.3505E-06"
+        izz="4.9996E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/End.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ufdr/meshes/End.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint3"
+    type="revolute">
+    <origin
+      xyz="0.11625 0.00029954 -2.098E-05"
+      rpy="-2.3043 1.5706 3.1184" />
+    <parent
+      link="Link_3" />
+    <child
+      link="End" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+</robot>
