@@ -1,9 +1,30 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { ArmVisualizer as VisualizerClass } from './ArmVisualizer';
 
-function ArmVisualization({ viewMode, setViewMode, position }) {
+function ArmVisualization({ viewMode, setViewMode, position, angles }) {
     const canvasRef = useRef(null);
+    const [visualizer, setVisualizer] = useState(null);
 
-    // We can port canvas drawing logic here later inside useEffect
+    useEffect(() => {
+        if (canvasRef.current && !visualizer) {
+            const viz = new VisualizerClass(canvasRef.current);
+            setVisualizer(viz);
+
+            const handleResize = () => viz.resize();
+            window.addEventListener('resize', handleResize);
+            return () => {
+                window.removeEventListener('resize', handleResize);
+                viz.destroy();
+            };
+        }
+    }, [canvasRef, visualizer]);
+
+    useEffect(() => {
+        if (visualizer && angles.length >= 4) {
+            visualizer.setView(viewMode);
+            visualizer.draw(position.x, position.y, position.z, angles[0], angles[1], angles[2], angles[3]);
+        }
+    }, [visualizer, viewMode, position, angles]);
 
     return (
         <section className="visualization-panel glass-panel">
