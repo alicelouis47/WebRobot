@@ -4,8 +4,10 @@ Flask-based server for robot arm object detection and pick-place control
 Uses USB webcam for video capture
 """
 
-from flask import Flask, Response, jsonify, request
-from flask_cors import CORS
+from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 import cv2
 import numpy as np
 import json
@@ -27,8 +29,15 @@ except ImportError:
     YOLO_AVAILABLE = False
     print("⚠️ Ultralytics not installed. Run: pip install ultralytics")
 
-app = Flask(__name__)
-CORS(app)
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ============================================
 # Configuration
@@ -445,10 +454,10 @@ def generate_frames():
 # ============================================
 # API Routes
 # ============================================
-@app.route('/')
+@app.get('/')
 def index():
     """API info"""
-    return jsonify({
+    return {
         'name': 'Robot Arm Object Detection Server',
         'version': '1.1',
         'yolo_available': YOLO_AVAILABLE,
@@ -456,59 +465,58 @@ def index():
         'camera_active': state.camera is not None and state.camera.isOpened(),
         'aruco_calibrated': state.aruco_calibrated,
         'aruco_last_calibration': state.last_calibration_time
-    })
+    }
 
-@app.route('/video_feed')
+@app.get('/video_feed')
 def video_feed():
     """MJPEG video stream"""
     if not init_camera():
-        return jsonify({'error': 'Camera not available'}), 500
+        return JSONResponse(status_code=500, content={'error': 'Camera not available'})
     
-    return Response(generate_frames(),
-                   mimetype='multipart/x-mixed-replace; boundary=frame')
+    return StreamingResponse(generate_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/detect', methods=['GET'])
+@app.get('/detect')
 def detect():
     """Get current detected objects"""
     with state.lock:
-        return jsonify({
+        return {
             'success': True,
             'objects': state.detected_objects,
             'count': len(state.detected_objects)
-        })
+        }
 
-@app.route('/snapshot', methods=['GET'])
+@app.get('/snapshot')
 def snapshot():
     """Capture single frame and detect objects"""
     if not init_camera():
-        return jsonify({'error': 'Camera not available'}), 500
+        return JSONResponse(status_code=500, content={'error': 'Camera not available'})
     
     frame = get_frame()
     if frame is None:
-        return jsonify({'error': 'Failed to capture frame'}), 500
+        return JSONResponse(status_code=500, content={'error': 'Failed to capture frame'})
     
     if state.model is not None:
         _, detected = detect_objects(frame)
-        return jsonify({
+        return {
             'success': True,
             'objects': detected,
             'count': len(detected)
-        })
+        }
     else:
-        return jsonify({
+        return {
             'success': False,
             'error': 'YOLO model not loaded',
             'objects': []
-        })
+        }
 
-@app.route('/pick_sequence/<int:object_id>', methods=['GET'])
-def pick_sequence(object_id):
+@app.get('/pick_sequence/{object_id}')
+def pick_sequence(object_id: int):
     """Generate pick sequence for object"""
     with state.lock:
         objects = state.detected_objects
     
     if object_id >= len(objects):
-        return jsonify({'error': 'Object not found'}), 404
+        return JSONResponse(status_code=404, content={'error': 'Object not found'})
     
     obj = objects[object_id]
     coords = obj['robot_coords']
@@ -521,16 +529,16 @@ def pick_sequence(object_id):
         {'action': 'move', 'x': coords['x'], 'y': coords['y'], 'z': CONFIG['safe_height'], 'desc': 'Lift object'},
     ]
     
-    return jsonify({
+    return {
         'success': True,
         'object': obj,
         'sequence': sequence
-    })
+    }
 
-@app.route('/place_sequence', methods=['POST'])
-def place_sequence():
+@app.post('/place_sequence')
+async def place_sequence(request: Request):
     """Generate place sequence for target location"""
-    data = request.json
+    data = await request.json()
     x = data.get('x', 0)
     y = data.get('y', 0)
     z = data.get('z', CONFIG['pick_height'])
@@ -543,43 +551,46 @@ def place_sequence():
         {'action': 'home', 'desc': 'Return home'},
     ]
     
-    return jsonify({
+    return {
         'success': True,
         'target': {'x': x, 'y': y, 'z': z},
         'sequence': sequence
-    })
+    }
 
-@app.route('/calibration', methods=['GET', 'POST'])
-def calibration():
-    """Get or update calibration parameters"""
-    if request.method == 'GET':
-        return jsonify({
-            'camera_height_mm': CONFIG['camera_height_mm'],
-            'camera_offset_x': CONFIG['camera_offset_x'],
-            'camera_offset_y': CONFIG['camera_offset_y'],
-            'pixels_per_mm': CONFIG['pixels_per_mm'],
-        })
-    else:
-        data = request.json
-        for key in ['camera_height_mm', 'camera_offset_x', 'camera_offset_y', 'pixels_per_mm']:
-            if key in data:
-                CONFIG[key] = data[key]
-        return jsonify({'success': True, 'config': CONFIG})
+@app.get('/calibration')
+def get_calibration():
+    """Get calibration parameters"""
+    return {
+        'camera_height_mm': CONFIG['camera_height_mm'],
+        'camera_offset_x': CONFIG['camera_offset_x'],
+        'camera_offset_y': CONFIG['camera_offset_y'],
+        'pixels_per_mm': CONFIG['pixels_per_mm'],
+    }
 
-@app.route('/aruco/calibrate', methods=['GET', 'POST'])
+@app.post('/calibration')
+async def update_calibration(request: Request):
+    """Update calibration parameters"""
+    data = await request.json()
+    for key in ['camera_height_mm', 'camera_offset_x', 'camera_offset_y', 'pixels_per_mm']:
+        if key in data:
+            CONFIG[key] = data[key]
+    return {'success': True, 'config': CONFIG}
+
+@app.get('/aruco/calibrate')
+@app.post('/aruco/calibrate')
 def aruco_calibrate():
     """Calibrate using ArUco markers"""
     if not init_camera():
-        return jsonify({'error': 'Camera not available'}), 500
+        return JSONResponse(status_code=500, content={'error': 'Camera not available'})
     
     frame = get_frame()
     if frame is None:
-        return jsonify({'error': 'Failed to capture frame'}), 500
+        return JSONResponse(status_code=500, content={'error': 'Failed to capture frame'})
     
     result = calibrate_aruco(frame)
-    return jsonify(result)
+    return result
 
-@app.route('/aruco/status', methods=['GET'])
+@app.get('/aruco/status')
 def aruco_status():
     """Get ArUco calibration status"""
     # Get current marker detection if camera is active
@@ -589,7 +600,7 @@ def aruco_status():
         if frame is not None:
             markers, _, _ = detect_aruco_markers(frame)
     
-    return jsonify({
+    return {
         'calibrated': state.aruco_calibrated,
         'last_calibration': state.last_calibration_time,
         'markers_detected': len(markers),
@@ -597,60 +608,63 @@ def aruco_status():
         'detected_ids': list(markers.keys()),
         'required_ids': CONFIG['marker_ids'],
         'marker_coords': CONFIG['marker_real_coords']
-    })
+    }
 
-@app.route('/aruco/config', methods=['GET', 'POST'])
-def aruco_config():
-    """Get or update ArUco marker configuration"""
-    if request.method == 'GET':
-        return jsonify({
-            'marker_size_mm': CONFIG['marker_size_mm'],
-            'marker_ids': CONFIG['marker_ids'],
-            'marker_real_coords': CONFIG['marker_real_coords']
-        })
-    else:
-        data = request.json
-        if 'marker_real_coords' in data:
-            # Update marker real-world coordinates
-            for key, value in data['marker_real_coords'].items():
-                CONFIG['marker_real_coords'][int(key)] = tuple(value)
-        if 'marker_size_mm' in data:
-            CONFIG['marker_size_mm'] = data['marker_size_mm']
-        # Reset calibration when config changes
-        state.aruco_calibrated = False
-        state.homography_matrix = None
-        return jsonify({'success': True, 'message': 'ArUco config updated. Please recalibrate.'})
+@app.get('/aruco/config')
+def get_aruco_config():
+    """Get ArUco marker configuration"""
+    return {
+        'marker_size_mm': CONFIG['marker_size_mm'],
+        'marker_ids': CONFIG['marker_ids'],
+        'marker_real_coords': CONFIG['marker_real_coords']
+    }
 
-@app.route('/cameras', methods=['GET'])
+@app.post('/aruco/config')
+async def update_aruco_config(request: Request):
+    """Update ArUco marker configuration"""
+    data = await request.json()
+    if 'marker_real_coords' in data:
+        # Update marker real-world coordinates
+        for key, value in data['marker_real_coords'].items():
+            CONFIG['marker_real_coords'][int(key)] = tuple(value)
+    if 'marker_size_mm' in data:
+        CONFIG['marker_size_mm'] = data['marker_size_mm']
+    # Reset calibration when config changes
+    state.aruco_calibrated = False
+    state.homography_matrix = None
+    return {'success': True, 'message': 'ArUco config updated. Please recalibrate.'}
+
+@app.get('/cameras')
 def get_cameras_list():
     """Get list of available cameras"""
     cameras = get_available_cameras()
-    return jsonify({
+    return {
         'success': True,
         'cameras': cameras,
         'current_index': CONFIG['camera_index']
-    })
+    }
 
-@app.route('/camera/start', methods=['POST'])
-def camera_start():
+@app.post('/camera/start')
+async def camera_start(request: Request):
     """Start camera"""
-    if request.is_json:
-        data = request.json
+    try:
+        data = await request.json()
         if 'camera_index' in data:
             new_index = int(data['camera_index'])
-            # If camera is already open with a different index, release it
             if state.camera is not None and CONFIG['camera_index'] != new_index:
                 release_camera()
             CONFIG['camera_index'] = new_index
+    except Exception:
+        pass
 
     success = init_camera()
-    return jsonify({'success': success})
+    return {'success': success}
 
-@app.route('/camera/stop', methods=['POST'])
+@app.post('/camera/stop')
 def camera_stop():
     """Stop camera"""
     release_camera()
-    return jsonify({'success': True})
+    return {'success': True}
 
 # ============================================
 # Main
@@ -672,6 +686,6 @@ if __name__ == '__main__':
     print("\nPress Ctrl+C to stop\n")
     
     try:
-        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+        uvicorn.run(app, host='0.0.0.0', port=5000)
     finally:
         release_camera()
