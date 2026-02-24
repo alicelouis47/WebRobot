@@ -980,6 +980,8 @@ function initObjectDetection() {
     const btnDetect = document.getElementById('btnDetect');
     const btnPickPlace = document.getElementById('btnPickPlace');
 
+    const cameraSelect = document.getElementById('cameraSelect');
+
     if (btnStartCamera) {
         btnStartCamera.addEventListener('click', startCamera);
     }
@@ -993,8 +995,37 @@ function initObjectDetection() {
         btnPickPlace.addEventListener('click', executePickPlace);
     }
 
-    // Check if detection server is available
-    checkDetectionServer();
+    // Check if detection server is available and load cameras
+    checkDetectionServer().then(() => {
+        loadCameras();
+    });
+}
+
+async function loadCameras() {
+    const cameraSelect = document.getElementById('cameraSelect');
+    if (!cameraSelect) return;
+
+    try {
+        cameraSelect.innerHTML = '<option value="">Loading cameras...</option>';
+        cameraSelect.disabled = true;
+
+        const response = await fetch(`${CONFIG.DETECTION_SERVER}/cameras`);
+        const data = await response.json();
+
+        if (data.success && data.cameras.length > 0) {
+            cameraSelect.innerHTML = data.cameras.map(cam =>
+                `<option value="${cam.index}" ${cam.index === data.current_index ? 'selected' : ''}>
+                    ${cam.name}
+                </option>`
+            ).join('');
+            cameraSelect.disabled = false;
+        } else {
+            cameraSelect.innerHTML = '<option value="">No cameras found</option>';
+        }
+    } catch (error) {
+        console.error('Failed to load cameras:', error);
+        cameraSelect.innerHTML = '<option value="">Failed to load cameras</option>';
+    }
 }
 
 async function checkDetectionServer() {
@@ -1010,33 +1041,78 @@ async function checkDetectionServer() {
     }
 }
 
-function startCamera() {
+async function startCamera() {
     const cameraFeed = document.getElementById('cameraFeed');
     const cameraOverlay = document.getElementById('cameraOverlay');
     const cameraStatus = document.getElementById('cameraStatus');
     const btnStartCamera = document.getElementById('btnStartCamera');
     const btnStopCamera = document.getElementById('btnStopCamera');
     const btnDetect = document.getElementById('btnDetect');
+    const cameraSelect = document.getElementById('cameraSelect');
 
-    // Set video source to MJPEG stream
-    cameraFeed.src = `${CONFIG.DETECTION_SERVER}/video_feed`;
-    cameraFeed.classList.add('active');
-    cameraOverlay.classList.add('hidden');
+    const selectedCameraIndex = cameraSelect ? cameraSelect.value : null;
 
-    // Update status
-    const statusDot = cameraStatus.querySelector('.status-dot');
-    const statusText = cameraStatus.querySelector('.status-text');
-    statusDot.classList.remove('offline');
-    statusDot.classList.add('online');
-    statusText.textContent = 'Live';
+    try {
+        btnStartCamera.disabled = true;
+        btnStartCamera.innerHTML = '<span class="btn-icon">⏳</span><span>Starting...</span>';
 
-    // Update buttons
-    btnStartCamera.disabled = true;
-    btnStopCamera.disabled = false;
-    btnDetect.disabled = false;
+        // Trigger POST to start camera, potentially with a new index
+        const reqBody = selectedCameraIndex !== null
+            ? JSON.stringify({ camera_index: selectedCameraIndex })
+            : '{}';
 
-    detectionState.isCameraActive = true;
-    showNotification('Camera started', 'info');
+        const response = await fetch(`${CONFIG.DETECTION_SERVER}/camera/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: reqBody
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Add a cache-busting query parameter to force browser to reload the stream
+            // Useful if stream was previously active but cached
+            const cacheBuster = new Date().getTime();
+            cameraFeed.src = `${CONFIG.DETECTION_SERVER}/video_feed?t=${cacheBuster}`;
+
+            cameraFeed.classList.add('active');
+            cameraOverlay.classList.add('hidden');
+
+            // Update status
+            const statusDot = cameraStatus.querySelector('.status-dot');
+            const statusText = cameraStatus.querySelector('.status-text');
+            statusDot.classList.remove('offline');
+            statusDot.classList.add('online');
+            statusText.textContent = 'Live';
+
+            // Update buttons
+            btnStartCamera.innerHTML = '<span class="btn-icon">▶️</span><span>Start Camera</span>';
+            btnStartCamera.disabled = true;
+            btnStopCamera.disabled = false;
+            btnDetect.disabled = false;
+            if (cameraSelect) cameraSelect.disabled = true;
+
+            detectionState.isCameraActive = true;
+            showNotification('Camera started', 'info');
+
+            // Re-load ArUco Button Status
+            const btnCalibrate = document.getElementById('btnCalibrateAruco');
+            if (btnCalibrate) {
+                btnCalibrate.disabled = false;
+            }
+            setTimeout(checkArucoStatus, 1000); // Check after a brief delay
+
+        } else {
+            showNotification('Failed to start camera', 'error');
+            btnStartCamera.innerHTML = '<span class="btn-icon">▶️</span><span>Start Camera</span>';
+            btnStartCamera.disabled = false;
+        }
+    } catch (error) {
+        console.error('Camera start error:', error);
+        showNotification('Failed to communicate with server', 'error');
+        btnStartCamera.innerHTML = '<span class="btn-icon">▶️</span><span>Start Camera</span>';
+        btnStartCamera.disabled = false;
+    }
 }
 
 function stopCamera() {
@@ -1046,12 +1122,17 @@ function stopCamera() {
     const btnStartCamera = document.getElementById('btnStartCamera');
     const btnStopCamera = document.getElementById('btnStopCamera');
     const btnDetect = document.getElementById('btnDetect');
+    const cameraSelect = document.getElementById('cameraSelect');
 
     // Stop video
     cameraFeed.src = '';
     cameraFeed.classList.remove('active');
     cameraOverlay.classList.remove('hidden');
     cameraOverlay.innerHTML = '<span>Camera stopped</span>';
+
+    // Call API to release camera resource
+    fetch(`${CONFIG.DETECTION_SERVER}/camera/stop`, { method: 'POST' })
+        .catch(e => console.error('Failed to stop camera server-side', e));
 
     // Update status
     const statusDot = cameraStatus.querySelector('.status-dot');
@@ -1064,9 +1145,16 @@ function stopCamera() {
     btnStartCamera.disabled = false;
     btnStopCamera.disabled = true;
     btnDetect.disabled = true;
+    if (cameraSelect) cameraSelect.disabled = false;
 
     detectionState.isCameraActive = false;
     showNotification('Camera stopped', 'info');
+
+    // Disable ArUco Calibrate Button
+    const btnCalibrate = document.getElementById('btnCalibrateAruco');
+    if (btnCalibrate) {
+        btnCalibrate.disabled = true;
+    }
 }
 
 async function detectObjects() {
@@ -1308,27 +1396,8 @@ function initArucoCalibration() {
     }, 2000);
 }
 
-// Update startCamera to enable ArUco button
-const originalStartCamera = startCamera;
-startCamera = async function () {
-    await originalStartCamera();
-    const btnCalibrate = document.getElementById('btnCalibrateAruco');
-    if (btnCalibrate) {
-        btnCalibrate.disabled = false;
-    }
-    // Initial status check
-    setTimeout(checkArucoStatus, 500);
-};
-
-// Update stopCamera to disable ArUco button  
-const originalStopCamera = stopCamera;
-stopCamera = function () {
-    originalStopCamera();
-    const btnCalibrate = document.getElementById('btnCalibrateAruco');
-    if (btnCalibrate) {
-        btnCalibrate.disabled = true;
-    }
-};
+// Original overrides are no longer needed because the functions are rewritten above
+// The ArUco button logic is already integrated.
 
 // Start when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {

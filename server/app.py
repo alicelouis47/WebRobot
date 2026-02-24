@@ -11,6 +11,13 @@ import numpy as np
 import json
 import threading
 import time
+import platform
+try:
+    from pygrabber.dshow_graph import FilterGraph
+    PYGRABBER_AVAILABLE = True
+except ImportError:
+    PYGRABBER_AVAILABLE = False
+    print("⚠️ pygrabber not installed. Camera names might not be available.")
 
 # Try to import ultralytics for YOLOv11
 try:
@@ -139,6 +146,43 @@ def release_camera():
         state.camera.release()
         state.camera = None
         print("📷 Camera released")
+
+def get_available_cameras():
+    """Get list of available cameras and their names"""
+    cameras = []
+    
+    # Use pygrabber on Windows to get actual camera names
+    if platform.system() == 'Windows' and PYGRABBER_AVAILABLE:
+        try:
+            graph = FilterGraph()
+            devices = graph.get_input_devices()
+            for i, name in enumerate(devices):
+                cameras.append({'index': i, 'name': name})
+            return cameras
+        except Exception as e:
+            print(f"Failed to get camera names with pygrabber: {e}")
+            # Fall back to CV2 method if pygrabber fails
+            
+    # Fallback/Linux/Mac method: test indices up to 5
+    for i in range(5):
+        try:
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                has_frame, _ = cap.read()
+                if has_frame:
+                    cameras.append({
+                        'index': i, 
+                        'name': f"Camera {i}"
+                    })
+                cap.release()
+        except Exception:
+            pass
+            
+    # If no cameras found at all, return at least a default option
+    if not cameras:
+        cameras = [{'index': 0, 'name': "Default Camera (0)"}, {'index': 1, 'name': "USB Camera 1"}]
+        
+    return cameras
 
 def get_frame():
     """Capture a frame from webcam"""
@@ -577,9 +621,28 @@ def aruco_config():
         state.homography_matrix = None
         return jsonify({'success': True, 'message': 'ArUco config updated. Please recalibrate.'})
 
+@app.route('/cameras', methods=['GET'])
+def get_cameras_list():
+    """Get list of available cameras"""
+    cameras = get_available_cameras()
+    return jsonify({
+        'success': True,
+        'cameras': cameras,
+        'current_index': CONFIG['camera_index']
+    })
+
 @app.route('/camera/start', methods=['POST'])
 def camera_start():
     """Start camera"""
+    if request.is_json:
+        data = request.json
+        if 'camera_index' in data:
+            new_index = int(data['camera_index'])
+            # If camera is already open with a different index, release it
+            if state.camera is not None and CONFIG['camera_index'] != new_index:
+                release_camera()
+            CONFIG['camera_index'] = new_index
+
     success = init_camera()
     return jsonify({'success': success})
 

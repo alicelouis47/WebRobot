@@ -4,9 +4,11 @@
 
 :root {
     /* Color Palette */
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #12121a;
-    --bg-glass: rgba(20, 20, 35, 0.7);
+    --bg-primary: #0f172a;
+    /* Slate 900 */
+    --bg-secondary: #1e293b;
+    /* Slate 800 */
+    --bg-glass: rgba(30, 41, 59, 0.75);
     --border-glass: rgba(255, 255, 255, 0.1);
 
     /* Accent Colors */
@@ -83,58 +85,15 @@ body {
     width: 100%;
     height: 100%;
     background-image:
-        linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
     background-size: 50px 50px;
-    animation: gridPulse 4s ease-in-out infinite;
-}
-
-@keyframes gridPulse {
-
-    0%,
-    100% {
-        opacity: 0.5;
-    }
-
-    50% {
-        opacity: 1;
-    }
+    /* Removed pulsing for less distraction */
 }
 
 .floating-particles {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-}
-
-.particle {
-    position: absolute;
-    width: 4px;
-    height: 4px;
-    background: var(--accent-cyan);
-    border-radius: 50%;
-    animation: float 15s infinite linear;
-    opacity: 0.6;
-}
-
-@keyframes float {
-    0% {
-        transform: translateY(100vh) rotate(0deg);
-        opacity: 0;
-    }
-
-    10% {
-        opacity: 0.6;
-    }
-
-    90% {
-        opacity: 0.6;
-    }
-
-    100% {
-        transform: translateY(-100vh) rotate(720deg);
-        opacity: 0;
-    }
+    display: none;
+    /* Removed for cleaner UI */
 }
 
 /* Container */
@@ -265,25 +224,36 @@ body {
 /* Main Content Grid */
 .main-content {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: 1fr 380px;
+    gap: var(--spacing-lg);
+    align-items: start;
+}
+
+.visuals-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.controls-column {
+    display: flex;
+    flex-direction: column;
     gap: var(--spacing-md);
 }
 
 /* Control Row - XYZ + Quick Actions side by side */
 .control-row {
     display: flex;
+    flex-direction: column;
     gap: var(--spacing-md);
-    grid-column: span 2;
 }
 
 .control-row .control-panel {
-    flex: 1;
-    min-width: 0;
+    width: 100%;
 }
 
 .control-row .actions-panel {
-    flex: 0 0 auto;
-    width: 200px;
+    width: 100%;
     display: flex;
     flex-direction: column;
 }
@@ -755,13 +725,14 @@ body {
 }
 
 .btn-adjust {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border: none;
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
-    font-size: 1.4rem;
+    font-size: 1.6rem;
+    font-weight: bold;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
@@ -783,8 +754,8 @@ body {
     flex-grow: 1;
     -webkit-appearance: none;
     appearance: none;
-    height: 8px;
-    border-radius: 4px;
+    height: 12px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
     outline: none;
     cursor: pointer;
@@ -793,8 +764,8 @@ body {
 .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -822,13 +793,14 @@ body {
 /* Axis Input */
 .axis-input {
     width: 100%;
-    padding: var(--spacing-xs);
-    background: rgba(0, 0, 0, 0.3);
+    padding: var(--spacing-sm);
+    background: rgba(0, 0, 0, 0.4);
     border: 1px solid var(--border-glass);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
     font-family: 'Orbitron', sans-serif;
-    font-size: 1rem;
+    font-size: 1.2rem;
+    font-weight: 700;
     text-align: center;
     outline: none;
     transition: border-color 0.3s ease;
@@ -1187,11 +1159,13 @@ body {
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
-    .visualization-panel {
-        grid-column: span 1;
+@media (max-width: 1024px) {
+    .main-content {
+        grid-template-columns: 1fr;
     }
+}
 
+@media (max-width: 768px) {
     .header {
         flex-direction: column;
         gap: var(--spacing-sm);
@@ -1380,4 +1354,46 @@ body {
 .password-masked {
     letter-spacing: 2px;
     font-size: 0.9rem;
+}
+
+/* Camera Select Styles */
+.camera-select-container {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.camera-select {
+    width: 100%;
+    padding: 10px 15px;
+    background: rgba(10, 10, 15, 0.4);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 8px;
+    color: var(--text-light);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f0ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    background-size: 15px;
+}
+
+.camera-select:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+}
+
+.camera-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.camera-select option {
+    background: #151520;
+    color: var(--text-light);
+    padding: 10px;
 }
