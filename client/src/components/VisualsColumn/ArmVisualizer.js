@@ -76,7 +76,9 @@ export class ArmVisualizer {
     }
 
     calculateArmPositions(x, y, z, servo1, servo2, servo3, servo4) {
-        const baseAngle = (servo1 - 90) * Math.PI / 180;
+        // Calculate the pure drawing angle directly from X, Y
+        // This allows the visualizer to show negative X even if the physical servo caps at 180
+        const baseAngle = (x === 0 && y === 0) ? 0 : Math.atan2(y, x);
         const shoulderAngle = (90 - servo2) * Math.PI / 180;
         const elbowAngle = (90 - servo3) * Math.PI / 180;
 

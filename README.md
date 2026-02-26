@@ -8,15 +8,17 @@
 
 ## ⚡ Features
 
-- 🎮 **Web-based Control** — ควบคุมผ่าน Browser (Chrome, Firefox, Edge)
+- 🎮 **Web-based Control** — ควบคุมผ่าน Browser (React Frontend)
 - 📍 **XYZ Coordinates** — ใส่พิกัด XYZ แล้ว Inverse Kinematics คำนวณมุม Servo อัตโนมัติ (4 joints)
 - 📡 **Real-time WebSocket** — การสื่อสารแบบ Real-time ความหน่วงต่ำ
-- 🎨 **Modern UI** — Premium dark theme พร้อม glassmorphism และ micro-animations
+- 🎨 **Modern UI** — สร้างด้วย React + Vite พร้อม Premium dark theme และ Micro-animations
 - 📊 **Servo Visualization** — แสดงมุม Servo 4 ตัวพร้อม 3D visualization (Side/Top/Front/3D view)
 - 🛑 **Emergency Stop** — ปุ่มหยุดฉุกเฉิน
 - 📷 **Object Detection** — ตรวจจับวัตถุด้วย YOLOv11 ผ่าน USB Webcam
+- 📹 **Camera Selection** — เลือกระบุและสลับกล้องที่ใช้งานผ่านหน้า UI ได้สดๆ
 - 🎯 **ArUco Calibration** — ปรับเทียบพิกัดด้วย ArUco Markers สำหรับความแม่นยำสูง
 - 🤏 **Pick & Place** — ระบบหยิบ-วางอัตโนมัติโดยอ้างอิงจาก Object Detection
+- 👁️ **Hide WiFi Password** — สลับโหมดเปิด/ปิดหน้าตา/รหัสผ่าน Wi-Fi ของหุ่นยนต์ได้
 
 ## 🦾 URDF Robot Arm Specifications
 
@@ -82,7 +84,19 @@ GND         ->   Servo GND
 4. เลือก Board: ESP32 Dev Module
 5. Upload โค้ดไปยัง ESP32
 
-### 2. ติดตั้ง Object Detection Server (Optional)
+### 2. ติดตั้ง Web Frontend (React + Vite)
+
+โค้ดส่วนของ Frontend ดั้งเดิม (Vanilla JS) ถูกย้ายและเปลี่ยนเป็น React ในโฟลเดอร์ `client/`
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+### 3. ติดตั้ง Object Detection Server (Optional)
+
+ใช้ FastAPI สำหรับการทำงานแทน Flask ในระบบเดิม
 
 ```bash
 cd server
@@ -90,18 +104,19 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Server จะเริ่มที่ `http://localhost:5000` พร้อม API สำหรับ:
+Server จะเริ่มที่ `http://localhost:5000` (FastAPI + Uvicorn) พร้อม API สำหรับ:
 - Video stream (MJPEG)
 - Object detection (YOLOv11)
 - ArUco calibration
 - Pick & Place sequences
+- Camera list detection
 
-### 3. Connect to Robot Arm
+### 4. Connect to Robot Arm
 
 1. **เปิด ESP32** — รอสักครู่ให้เริ่มทำงาน
 2. **เชื่อมต่อ WiFi** — ค้นหาและเชื่อมต่อ WiFi `RobotArm_AP`
    - Password: `12345678`
-3. **เปิด Web Interface** — เปิดไฟล์ `index.html` ใน Browser
+3. **เปิด Web Interface** — เปิดที่ `http://localhost:5173` (หากรันจาก Vite)
 4. **Connect** — กดปุ่ม CONNECT (IP: `192.168.4.1`, Port: `81`)
 
 ## 🎮 Usage
@@ -137,20 +152,23 @@ Server จะเริ่มที่ `http://localhost:5000` พร้อม AP
 
 ```
 WebRobot/
-├── index.html              # หน้าเว็บหลัก (UI ควบคุม + camera + servo gauges)
-├── style.css               # Premium Dark Theme + gauge styles
-├── app.js                  # Logic, IK, WebSocket, visualization
-├── README.md               # คู่มือการใช้งาน
-├── yolo11n.pt              # YOLOv11 model weights
+├── client/                 # React + Vite Frontend (Active)
+│   ├── src/                # ซอร์สโค้ด React Components
+│   └── package.json        # Node.js dependencies
+├── index.html              # หน้าเว็บหลัก (Vanilla JS เดิม/Deprecated)
+├── style.css               # สไตล์หน้าเว็บเดิม
+├── app.js                  # Logic เดิมการควบคุม
+├── README.md               # คู่มือการใช้งานฉบับนี้
 ├── esp32/
 │   └── esp32_robot_arm.ino # Firmware ESP32 (4 joints + gripper, MG90s)
 ├── server/
-│   ├── app.py              # Flask server - Object Detection & ArUco
-│   └── requirements.txt    # Python dependencies
+│   ├── app.py              # FastAPI server - Object Detection & ArUco
+│   ├── requirements.txt    # Python dependencies สำหรับ Backend
+│   └── yolo11n.pt          # YOLOv11 model weights
 └── URDF_Robot_arm/
     ├── urdf/
     │   ├── ufdr.urdf       # URDF model definition
-    │   ├── ufdr.csv         # Joint parameters summary
+    │   ├── ufdr.csv        # Joint parameters summary
     │   └── ...
     ├── meshes/             # 3D mesh files (STL/DAE)
     ├── config/             # Joint configuration (YAML)
