@@ -2,7 +2,8 @@ import React from 'react';
 
 function ObjectDetection({
     cameraActive, onStartCamera, onStopCamera, onDetect, availableCameras,
-    selectedCamera, setSelectedCamera, detectedObjects, onExecutePickPlace
+    selectedCamera, setSelectedCamera, availableModels, selectedModel,
+    onModelSwitch, isModelSwitching, detectedObjects, onExecutePickPlace
 }) {
     return (
         <section className="camera-panel glass-panel">
@@ -36,6 +37,22 @@ function ObjectDetection({
                         {availableCameras.length === 0 && <option value="">Loading cameras...</option>}
                         {availableCameras.map(cam => (
                             <option key={cam.index} value={cam.index}>{cam.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="camera-select-container">
+                    <select
+                        id="modelSelect"
+                        className="camera-select"
+                        value={selectedModel || ''}
+                        onChange={(e) => onModelSwitch(e.target.value)}
+                        disabled={isModelSwitching}
+                    >
+                        {availableModels?.length === 0 && <option value="">Loading models...</option>}
+                        {availableModels?.map(model => (
+                            <option key={model.id} value={model.id}>
+                                {model.name}
+                            </option>
                         ))}
                     </select>
                 </div>

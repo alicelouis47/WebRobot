@@ -24,6 +24,10 @@ function App() {
   const [selectedCamera, setSelectedCamera] = useState('');
   const [detectedObjects, setDetectedObjects] = useState([]);
   const [arucoStatus, setArucoStatus] = useState({ calibrated: false, markers_detected: 0 });
+  const [availableModels, setAvailableModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [isModelSwitching, setIsModelSwitching] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
 
   const [ip, setIp] = useState('192.168.4.1');
   const [port, setPort] = useState('81');
@@ -38,7 +42,7 @@ function App() {
     setAngles(newAngles);
   }, [position]);
 
-  // Fetch initial cameras
+  // Fetch initial cameras and models
   useEffect(() => {
     fetch(`${DETECTION_SERVER}/cameras`)
       .then(res => res.json())
@@ -49,6 +53,26 @@ function App() {
         }
       })
       .catch(err => console.error("Error fetching cameras:", err));
+
+    fetch(`${DETECTION_SERVER}/models`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setAvailableModels(data.available_models);
+          setSelectedModel(data.current_model);
+        }
+      })
+      .catch(err => console.error("Error fetching models:", err));
+
+    // Fetch initial grid status
+    fetch(`${DETECTION_SERVER}/grid/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.show_grid !== undefined) {
+          setShowGrid(data.show_grid);
+        }
+      })
+      .catch(err => console.error("Error fetching grid status:", err));
   }, []);
 
   // Poll detection API if camera is active
@@ -110,6 +134,29 @@ function App() {
     }
   };
 
+  const handleModelSwitch = async (modelName) => {
+    setIsModelSwitching(true);
+    setSelectedModel(modelName);
+    try {
+      const res = await fetch(`${DETECTION_SERVER}/model/switch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        console.log(`Switched to model ${data.current_model}`);
+      } else {
+        alert(data.error || "Failed to switch model");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error reaching server to switch model");
+    } finally {
+      setIsModelSwitching(false);
+    }
+  };
+
   const handleCalibrateAruco = async () => {
     try {
       const res = await fetch(`${DETECTION_SERVER}/aruco/calibrate`, { method: 'POST' });
@@ -121,6 +168,22 @@ function App() {
       }
     } catch (err) {
       alert("Error reaching calibration server.");
+    }
+  };
+
+  const handleToggleGrid = async () => {
+    try {
+      const res = await fetch(`${DETECTION_SERVER}/grid/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_grid: !showGrid })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowGrid(data.show_grid);
+      }
+    } catch (err) {
+      console.error("Error toggling grid:", err);
     }
   };
 
@@ -162,12 +225,18 @@ function App() {
               availableCameras={availableCameras}
               selectedCamera={selectedCamera}
               setSelectedCamera={setSelectedCamera}
+              availableModels={availableModels}
+              selectedModel={selectedModel}
+              onModelSwitch={handleModelSwitch}
+              isModelSwitching={isModelSwitching}
               detectedObjects={detectedObjects}
               onExecutePickPlace={() => { }}
             />
             <ArucoCalibration
               arucoStatus={arucoStatus}
               onCalibrate={handleCalibrateAruco}
+              showGrid={showGrid}
+              onToggleGrid={handleToggleGrid}
             />
           </div>
 

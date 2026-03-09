@@ -14,6 +14,7 @@ import json
 import threading
 import time
 import platform
+import glob
 try:
     from pygrabber.dshow_graph import FilterGraph
     PYGRABBER_AVAILABLE = True
@@ -54,34 +55,40 @@ CONFIG = {
     'camera_offset_y': 150,   # Camera offset from robot base (Y)
     'pixels_per_mm': 2.5,     # Calibration factor
     
-    # Workspace bounds (mm)
-    'workspace_x_min': -100,
-    'workspace_x_max': 100,
-    'workspace_y_min': -100,
-    'workspace_y_max': 100,
+    # Workspace bounds (mm) (A4 size: 297x210 mm, landscape, starting at X=50)
+    'workspace_x_min': 50,
+    'workspace_x_max': 260,   # 50 + 210
+    'workspace_y_min': -148.5, # -297/2
+    'workspace_y_max': 148.5,  # 297/2
     'pick_height': 10,        # Height when picking object
     'safe_height': 80,        # Safe travel height
     
     # ArUco Marker Configuration
     'aruco_dict_type': cv2.aruco.DICT_4X4_50,
     'marker_size_mm': 30,     # Physical marker size in mm
-    # Expected marker IDs based on user diagram:
-    #   [1]-------[3]  <- Top edge (Y cm ปรับได้)
-    #    |         |
-    #    |         |
-    #   [0]-------[2]
-    #               \--- X cm ปรับได้ --- (0,0)
+    # Expected marker IDs based on A4 configuration:
+    # [Top edge of A4 paper - Landscape 297x210mm]
+    #   | 4 cm 
+    #  [0]------- 12 cm -------[1]  <- Furthest from robot (Top)
+    #   |                       |
+    #  8 cm                    8 cm
+    #   |                       |
+    #  [2]------- 12 cm -------[3]  <- Closest to robot (Bottom)
     'marker_ids': [0, 1, 2, 3],
     
     # Real-world coordinates of marker centers (mm) relative to robot base
     # Robot is at (0,0). X axis is Forward, Y axis is Left.
-    # offset_x = distance to board ("X cm"), size_y = size of board ("Y cm")
-    # Setting defaults: X = 5cm (50mm), Y = 16cm (160mm)
+    # We assume A4 paper (Landscape) is placed with its bottom edge at X = 50 mm from the robot base.
+    # Center of paper is at Y = 0.
+    # Top edge X = 50 + 210 = 260 mm. 
+    # ID:0 and ID:1 are 4 cm (40 mm) from top edge -> X = 260 - 40 = 220 mm.
+    # ID:2 and ID:3 are 8 cm (80 mm) closer than ID:0 -> X = 220 - 80 = 140 mm.
+    # Y-axis is centered. Width = 120 mm -> Left is +60 mm, Right is -60 mm.
     'marker_real_coords': {
-        0: (50 + 160, 160/2),    # Bottom-Left in diagram -> Furthest Left
-        1: (50 + 160, -160/2),   # Top-Left in diagram -> Furthest Right
-        2: (50, 160/2),          # Bottom-Right in diagram -> Closest Left
-        3: (50, -160/2),         # Top-Right in diagram -> Closest Right
+        0: (220, 60),    # Top-Left (ID:0)
+        1: (220, -60),   # Top-Right (ID:1)
+        2: (140, 60),    # Bottom-Left (ID:2)
+        3: (140, -60),   # Bottom-Right (ID:3)
     },
 }
 
@@ -95,6 +102,7 @@ class DetectionState:
         self.current_frame = None
         self.detected_objects = []
         self.model = None
+        self.current_model_name = 'yolo11n.pt'
         self.lock = threading.Lock()
         
         # ArUco calibration state
@@ -104,26 +112,25 @@ class DetectionState:
         self.aruco_calibrated = False
         self.detected_markers = {}  # {id: center_point}
         self.last_calibration_time = None
+        self.show_grid = False  # Display 5mm grid overlay
         
 state = DetectionState()
 
 # ============================================
 # YOLO Model
 # ============================================
-def load_yolo_model():
-    """Load YOLOv11 model"""
+def load_yolo_model(model_name='yolo11n.pt'):
+    """Load YOLO model"""
     if not YOLO_AVAILABLE:
         print("❌ YOLO not available")
         return None
     
     try:
-        # Use YOLOv11 nano for faster inference
-        # You can change to 'yolo11s.pt', 'yolo11m.pt' for better accuracy
-        model = YOLO('yolo11n.pt')
-        print("✅ YOLOv11 model loaded successfully")
+        model = YOLO(model_name)
+        print(f"✅ YOLO model {model_name} loaded successfully")
         return model
     except Exception as e:
-        print(f"❌ Failed to load YOLO model: {e}")
+        print(f"❌ Failed to load YOLO model {model_name}: {e}")
         return None
 
 # ============================================
@@ -419,7 +426,54 @@ def draw_aruco_overlay(frame):
             if len(pts) == 4:
                 pts = np.array(pts, dtype=np.int32)
                 cv2.polylines(frame, [pts], True, (0, 255, 255), 2)
-    
+                
+            # Draw 5mm grid if enabled
+            if state.show_grid and state.homography_matrix is not None:
+                # Calculate inverse homography to map real coordinates back to pixels
+                inv_H = np.linalg.inv(state.homography_matrix)
+                
+                # Get workspace bounds
+                min_x = int(CONFIG['workspace_x_min'])
+                max_x = int(CONFIG['workspace_x_max'])
+                min_y = int(CONFIG['workspace_y_min'])
+                max_y = int(CONFIG['workspace_y_max'])
+                
+                # Generate grid lines at 5mm intervals
+                grid_color = (255, 255, 0) # Cyan grid lines
+                grid_thickness = 1
+                
+                # Draw vertical lines (constant Y)
+                for y in range(min_y, max_y + 1, 5):
+                    # Start and end points in real world
+                    pt1_real = np.array([[[min_x, y]]], dtype=np.float32)
+                    pt2_real = np.array([[[max_x, y]]], dtype=np.float32)
+                    
+                    # Convert to pixel coordinates
+                    pt1_px = cv2.perspectiveTransform(pt1_real, inv_H)
+                    pt2_px = cv2.perspectiveTransform(pt2_real, inv_H)
+                    
+                    # Draw line
+                    cv2.line(frame, 
+                             (int(pt1_px[0][0][0]), int(pt1_px[0][0][1])), 
+                             (int(pt2_px[0][0][0]), int(pt2_px[0][0][1])), 
+                             grid_color, grid_thickness)
+                             
+                # Draw horizontal lines (constant X)
+                for x in range(min_x, max_x + 1, 5):
+                    # Start and end points in real world
+                    pt1_real = np.array([[[x, min_y]]], dtype=np.float32)
+                    pt2_real = np.array([[[x, max_y]]], dtype=np.float32)
+                    
+                    # Convert to pixel coordinates
+                    pt1_px = cv2.perspectiveTransform(pt1_real, inv_H)
+                    pt2_px = cv2.perspectiveTransform(pt2_real, inv_H)
+                    
+                    # Draw line
+                    cv2.line(frame, 
+                             (int(pt1_px[0][0][0]), int(pt1_px[0][0][1])), 
+                             (int(pt2_px[0][0][0]), int(pt2_px[0][0][1])), 
+                             grid_color, grid_thickness)
+
     return frame
 
 # ============================================
@@ -462,10 +516,47 @@ def index():
         'version': '1.1',
         'yolo_available': YOLO_AVAILABLE,
         'model_loaded': state.model is not None,
+        'current_model': state.current_model_name,
         'camera_active': state.camera is not None and state.camera.isOpened(),
         'aruco_calibrated': state.aruco_calibrated,
         'aruco_last_calibration': state.last_calibration_time
     }
+
+@app.get('/models')
+def get_models():
+    """Get available YOLO models"""
+    pt_files = glob.glob('*.pt')
+    models = [{'id': f, 'name': f} for f in pt_files]
+    
+    if not models:
+        models = [
+            {'id': 'yolo11n.pt', 'name': 'yolo11n.pt'},
+            {'id': 'yolo26.pt', 'name': 'yolo26.pt'}
+        ]
+        
+    return {
+        'success': True,
+        'current_model': state.current_model_name,
+        'available_models': models
+    }
+
+@app.post('/model/switch')
+async def switch_model(request: Request):
+    """Switch to a different YOLO model"""
+    data = await request.json()
+    model_name = data.get('model')
+    
+    if not model_name:
+        return JSONResponse(status_code=400, content={'error': 'Model name required'})
+        
+    with state.lock:
+        new_model = load_yolo_model(model_name)
+        if new_model is not None:
+            state.model = new_model
+            state.current_model_name = model_name
+            return {'success': True, 'current_model': model_name}
+        else:
+            return JSONResponse(status_code=500, content={'error': f'Failed to load model {model_name}'})
 
 @app.get('/video_feed')
 def video_feed():
@@ -644,6 +735,22 @@ def get_cameras_list():
         'current_index': CONFIG['camera_index']
     }
 
+@app.get('/grid/status')
+def get_grid_status():
+    """Get grid display status"""
+    return {'show_grid': state.show_grid}
+
+@app.post('/grid/toggle')
+async def toggle_grid(request: Request):
+    """Toggle grid display over camera feed"""
+    data = await request.json()
+    if 'show_grid' in data:
+        state.show_grid = bool(data['show_grid'])
+    else:
+        state.show_grid = not state.show_grid
+        
+    return {'success': True, 'show_grid': state.show_grid}
+
 @app.post('/camera/start')
 async def camera_start(request: Request):
     """Start camera"""
@@ -675,7 +782,7 @@ if __name__ == '__main__':
     print("=" * 50)
     
     # Load YOLO model
-    state.model = load_yolo_model()
+    state.model = load_yolo_model(state.current_model_name)
     
     # Initialize camera
     init_camera()
