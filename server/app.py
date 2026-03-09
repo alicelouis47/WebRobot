@@ -45,8 +45,8 @@ app.add_middleware(
 # ============================================
 CONFIG = {
     'camera_index': 1,  # USB webcam index (0 = default camera)
-    'frame_width': 640,
-    'frame_height': 480,
+    'frame_width': 1920,
+    'frame_height': 1080,
     'confidence_threshold': 0.5,
     
     # Camera calibration (adjust based on your setup)
@@ -143,6 +143,8 @@ def init_camera():
     
     try:
         state.camera = cv2.VideoCapture(CONFIG['camera_index'])
+        # Request MJPG for better performance at high resolutions
+        state.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
         state.camera.set(cv2.CAP_PROP_FRAME_WIDTH, CONFIG['frame_width'])
         state.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CONFIG['frame_height'])
         
