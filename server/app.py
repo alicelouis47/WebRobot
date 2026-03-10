@@ -85,10 +85,10 @@ CONFIG = {
     # ID:2 and ID:3 are 8 cm (80 mm) closer than ID:0 -> X = 220 - 80 = 140 mm.
     # Y-axis is centered. Width = 120 mm -> Left is +60 mm, Right is -60 mm.
     'marker_real_coords': {
-        0: (220, 60),    # Top-Left (ID:0)
-        1: (220, -60),   # Top-Right (ID:1)
-        2: (140, 60),    # Bottom-Left (ID:2)
-        3: (140, -60),   # Bottom-Right (ID:3)
+        0: (230, 56),    # Top-Left (ID:0)
+        1: (230, -56),   # Top-Right (ID:1)
+        2: (150, 56),    # Bottom-Left (ID:2)
+        3: (150, -56),   # Bottom-Right (ID:3)
     },
 }
 
@@ -422,7 +422,8 @@ def draw_aruco_overlay(frame):
         # Draw workspace bounds if all 4 markers detected
         if len(markers) >= 4:
             pts = []
-            for mid in CONFIG['marker_ids']:
+            # Order markers to draw a proper rectangular outline (TL -> TR -> BR -> BL)
+            for mid in [0, 1, 3, 2]:
                 if mid in markers:
                     pts.append(markers[mid])
             if len(pts) == 4:
@@ -434,11 +435,13 @@ def draw_aruco_overlay(frame):
                 # Calculate inverse homography to map real coordinates back to pixels
                 inv_H = np.linalg.inv(state.homography_matrix)
                 
-                # Get workspace bounds
-                min_x = int(CONFIG['workspace_x_min'])
-                max_x = int(CONFIG['workspace_x_max'])
-                min_y = int(CONFIG['workspace_y_min'])
-                max_y = int(CONFIG['workspace_y_max'])
+                # Get bounds of the detected markers to avoid excessive grid drawing
+                marker_xs = [coord[0] for coord in CONFIG['marker_real_coords'].values()]
+                marker_ys = [coord[1] for coord in CONFIG['marker_real_coords'].values()]
+                min_x = int(min(marker_xs))
+                max_x = int(max(marker_xs))
+                min_y = int(min(marker_ys))
+                max_y = int(max(marker_ys))
                 
                 # Generate grid lines at 5mm intervals
                 grid_color = (255, 255, 0) # Cyan grid lines
