@@ -15,6 +15,8 @@ import threading
 import time
 import platform
 import glob
+import serial
+import serial.tools.list_ports
 try:
     from pygrabber.dshow_graph import FilterGraph
     PYGRABBER_AVAILABLE = True
@@ -44,7 +46,7 @@ app.add_middleware(
 # Configuration
 # ============================================
 CONFIG = {
-    'camera_index': 1,  # USB webcam index (0 = default camera)
+    'camera_index': 0,  # USB webcam index (0 = default camera)
     'frame_width': 1920,
     'frame_height': 1080,
     'confidence_threshold': 0.5,
@@ -113,6 +115,9 @@ class DetectionState:
         self.detected_markers = {}  # {id: center_point}
         self.last_calibration_time = None
         self.show_grid = False  # Display 5mm grid overlay
+        
+        # Robot Serial Connection
+        self.robot_serial = None
         
 state = DetectionState()
 
@@ -777,6 +782,84 @@ def camera_stop():
     """Stop camera"""
     release_camera()
     return {'success': True}
+
+# ============================================
+# Robot Arm Serial API
+# ============================================
+@app.get('/robot/ports')
+def get_robot_ports():
+    """Get list of available COM ports"""
+    ports = [port.device for port in serial.tools.list_ports.comports()]
+    return {'success': True, 'ports': ports}
+
+@app.post('/robot/connect')
+async def robot_connect(request: Request):
+    """Connect to robot arm via Serial"""
+    data = await request.json()
+    port = data.get('port')
+    baudrate = data.get('baudrate', 115200)
+    
+    if not port:
+        return JSONResponse(status_code=400, content={'error': 'Port is required'})
+        
+    with state.lock:
+        try:
+            if state.robot_serial and state.robot_serial.is_open:
+                state.robot_serial.close()
+            state.robot_serial = serial.Serial(port, baudrate, timeout=1)
+            time.sleep(2)  # Wait for Arduino to reset
+            return {'success': True, 'message': f'Connected to {port}'}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={'error': str(e)})
+
+@app.post('/robot/disconnect')
+def robot_disconnect():
+    """Disconnect from robot arm"""
+    with state.lock:
+        if state.robot_serial and state.robot_serial.is_open:
+            state.robot_serial.close()
+            state.robot_serial = None
+    return {'success': True}
+
+@app.get('/robot/status')
+def robot_status():
+    """Get serial connection status"""
+    with state.lock:
+        is_connected = state.robot_serial is not None and state.robot_serial.is_open
+        port = state.robot_serial.port if is_connected else None
+    return {'connected': is_connected, 'port': port}
+
+@app.post('/robot/move')
+async def robot_move(request: Request):
+    """Send X,Y,Z coordinates to robot"""
+    data = await request.json()
+    x = data.get('x', 0)
+    y = data.get('y', 120)
+    z = data.get('z', 85)
+    
+    with state.lock:
+        if state.robot_serial and state.robot_serial.is_open:
+            cmd = f"{int(x)},{int(y)},{int(z)}\n"
+            try:
+                state.robot_serial.write(cmd.encode())
+                return {'success': True, 'cmd': cmd.strip()}
+            except Exception as e:
+                return JSONResponse(status_code=500, content={'error': str(e)})
+        else:
+            return JSONResponse(status_code=400, content={'error': 'Robot not connected'})
+
+@app.post('/robot/home')
+def robot_home():
+    """Send HOME command to robot"""
+    with state.lock:
+        if state.robot_serial and state.robot_serial.is_open:
+            try:
+                state.robot_serial.write(b"HOME\n")
+                return {'success': True}
+            except Exception as e:
+                return JSONResponse(status_code=500, content={'error': str(e)})
+        else:
+            return JSONResponse(status_code=400, content={'error': 'Robot not connected'})
 
 # ============================================
 # Main

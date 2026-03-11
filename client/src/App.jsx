@@ -29,8 +29,8 @@ function App() {
   const [isModelSwitching, setIsModelSwitching] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
 
-  const [ip, setIp] = useState('192.168.4.1');
-  const [port, setPort] = useState('81');
+  const [availablePorts, setAvailablePorts] = useState([]);
+  const [selectedPort, setSelectedPort] = useState('');
 
   // Polling intervals
   const detectInterval = useRef(null);
@@ -73,6 +73,27 @@ function App() {
         }
       })
       .catch(err => console.error("Error fetching grid status:", err));
+
+    // Fetch serial ports
+    fetch(`${DETECTION_SERVER}/robot/ports`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setAvailablePorts(data.ports);
+        }
+      })
+      .catch(err => console.error("Error fetching ports:", err));
+
+    // Fetch initial robot status
+    fetch(`${DETECTION_SERVER}/robot/status`)
+      .then(res => res.json())
+      .then(data => {
+        setConnected(data.connected);
+        if (data.connected && data.port) {
+            setSelectedPort(data.port);
+        }
+      })
+      .catch(err => console.error("Error fetching robot status:", err));
   }, []);
 
   // Poll detection API if camera is active
@@ -188,15 +209,57 @@ function App() {
   };
 
   const handlePositionChange = (axis, value) => {
-    setPosition(prev => ({ ...prev, [axis]: value }));
+    const newPos = { ...position, [axis]: value };
+    setPosition(newPos);
+    
+    // Only send to robot if connected backend
+    // Since sliders can fire rapidly, React state update is fine. Let's fire the API call directly.
+    fetch(`${DETECTION_SERVER}/robot/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: newPos.x, y: newPos.y, z: newPos.z })
+    }).catch(err => console.error("Error sending move command:", err));
   };
 
-  const handleAction = (action) => {
+  const handleAction = async (action) => {
     console.log(`Action: ${action}`);
+    if (action === 'home') {
+      try {
+        await fetch(`${DETECTION_SERVER}/robot/home`, { method: 'POST' });
+        setPosition({ x: 0, y: 120, z: 85 });
+      } catch(err) {
+        console.error("Home command error:", err);
+      }
+    }
   };
 
-  const handleConnect = () => {
-    setConnected(!connected);
+  const handleConnect = async () => {
+    if (connected) {
+      try {
+        await fetch(`${DETECTION_SERVER}/robot/disconnect`, { method: 'POST' });
+        setConnected(false);
+      } catch (err) {
+        console.error("Disconnect error:", err);
+      }
+    } else {
+      if (!selectedPort) return;
+      try {
+        const res = await fetch(`${DETECTION_SERVER}/robot/connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ port: selectedPort, baudrate: 115200 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setConnected(true);
+        } else {
+          alert(data.error || "Failed to connect to robot");
+        }
+      } catch (err) {
+        console.error("Connect error:", err);
+        alert("Error connecting to server");
+      }
+    }
   };
 
   return (
@@ -252,8 +315,9 @@ function App() {
             <ServoMonitor angles={angles} />
 
             <ConnectionSettings
-              ip={ip} setIp={setIp}
-              port={port} setPort={setPort}
+              availablePorts={availablePorts}
+              selectedPort={selectedPort}
+              setSelectedPort={setSelectedPort}
               connected={connected}
               onConnect={handleConnect}
             />
@@ -261,7 +325,7 @@ function App() {
         </main>
 
         <footer className="footer">
-          <p>🤖 ESP32 Robot Arm Controller | WebSocket Control System</p>
+          <p>🤖 Python/ESP32 Robot Arm Controller | React Frontend</p>
         </footer>
       </div>
     </>
