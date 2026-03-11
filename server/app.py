@@ -861,6 +861,25 @@ def robot_home():
         else:
             return JSONResponse(status_code=400, content={'error': 'Robot not connected'})
 
+@app.post('/robot/gripper')
+async def robot_gripper(request: Request):
+    """Send GRIP_OPEN or GRIP_CLOSE command to robot"""
+    data = await request.json()
+    action = data.get('action') # 'open' or 'close'
+    
+    with state.lock:
+        if state.robot_serial and state.robot_serial.is_open:
+            try:
+                if action == 'open':
+                    state.robot_serial.write(b"GRIP_OPEN")
+                elif action == 'close':
+                    state.robot_serial.write(b"GRIP_CLOSE")
+                return {'success': True, 'action': action}
+            except Exception as e:
+                return JSONResponse(status_code=500, content={'error': str(e)})
+        else:
+            return JSONResponse(status_code=400, content={'error': 'Robot not connected'})
+
 # ============================================
 # Main
 # ============================================

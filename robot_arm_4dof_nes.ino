@@ -1,4 +1,5 @@
 #include <Adafruit_PWMServoDriver.h>
+#include <ESP32Servo.h>
 #include <Wire.h>
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
@@ -19,6 +20,14 @@ const float L4 = 130.0;
 #define SERVOMAX 512
 
 // ============================================================
+//  Servo Offset (°) – ปรับค่า mechanical zero ของแต่ละแกน
+// ============================================================
+#define OFFSET_BASE 90
+#define OFFSET_SHOULDER 85
+#define OFFSET_ELBOW 80
+#define OFFSET_WRIST 85
+
+// ============================================================
 //  Pin 13 = Potentiometer ควบคุมก้มเงย gripper (Wrist Tilt)
 //  อ่านค่า 0–4095 (ESP32 ADC 12-bit) แล้วแปลงเป็น offset °
 //  ตรงกลาง = 0°  (gripper ตั้งฉากพื้น)
@@ -35,10 +44,33 @@ const float L4 = 130.0;
 #define TILT_DEADZONE 2.0f
 
 // ============================================================
+//  Gripper Servo บน GPIO Pin 15
+//  GRIPPER_OPEN_DEG  = องศาเปิด gripper (ปล่อยวัตถุ)
+//  GRIPPER_CLOSE_DEG = องศาปิด gripper (หยิบวัตถุ)
+// ============================================================
+#define GRIPPER_PIN 15
+#define GRIPPER_OPEN_DEG 0   // ปรับตามหุ่นจริง
+#define GRIPPER_CLOSE_DEG 50 // ปรับตามหุ่นจริง
+
+Servo gripperServo;
+
+// ============================================================
+//  Gripper TCP Offset (mm) – ชดเชยตำแหน่งที่ gripper เยื้องจาก 0,0
+//
+//  วัดจากหุ่นจริง:
+//    GRIPPER_OFFSET_L = เยื้องซ้าย  30 mm (ตั้งฉากกับทิศแขน)
+//    GRIPPER_OFFSET_A = เยื้องข้าง  15 mm (ตามทิศแขน)
+//
+//  หากวัดได้ว่าเยื้องทิศตรงข้าม ให้ใส่ค่าลบ เช่น -30.0
+// ============================================================
+#define GRIPPER_OFFSET_L 30.0f // ชดเชยซ้าย-ขวา (mm)  ซ้าย = บวก
+#define GRIPPER_OFFSET_A 10.0f // ชดเชยหน้า-หลัง (mm)  หน้า = บวก
+
+// ============================================================
 //  ความเร็วการเคลื่อนที่ (Interpolation ใน loop)
 // ============================================================
-float stepSize = 0.5; // mm ต่อ loop
-int speedDelay = 25;  // ms ต่อ loop
+float stepSize = 1.0; // mm ต่อ loop
+int speedDelay = 15;  // ms ต่อ loop
 
 // ============================================================
 //  พิกัดปัจจุบัน และเป้าหมาย
@@ -66,6 +98,7 @@ int angleToPWM(float angle);
 float readWristTilt();
 void calculateAndMoveIK(float x, float y, float z, float wristOffset);
 void moveToHome90();
+void setGripper(int deg);
 
 // ============================================================
 //  Setup
@@ -80,6 +113,10 @@ void setup() {
   // ESP32 ไม่ต้องการ pinMode สำหรับ analogRead
   // แต่ถ้าใช้ Arduino Uno ให้ uncomment บรรทัดด้านล่าง:
   // pinMode(WRIST_TILT_PIN, INPUT);
+
+  // ── Gripper Servo บน GPIO 15 ──────────────────────────────
+  gripperServo.attach(GRIPPER_PIN, 500, 2400); // 500–2400 µs
+  gripperServo.write(GRIPPER_OPEN_DEG);        // เริ่มต้น: เปิด gripper
 
   Serial.println("Initializing...");
 
@@ -106,9 +143,8 @@ void setup() {
   currentZ = 85.0;
   targetZ = 85.0;
 
-  Serial.println("Ready! Send X,Y,Z or HOME");
-  Serial.println(
-      "Pin 13 = Wrist Tilt Pot  (center=straight, CW=tilt up, CCW=tilt down)");
+  Serial.println("Ready! Send X,Y,Z or HOME or GRIP_OPEN/GRIP_CLOSE/GRIP_xxx");
+  Serial.println("Pin 13 = Wrist Tilt Pot  |  Pin 15 = Gripper Servo");
 }
 
 // ============================================================
@@ -128,6 +164,23 @@ void loop() {
 
     if (data == "HOME") {
       moveToHome90();
+
+    } else if (data == "GRIP_OPEN") {
+      setGripper(GRIPPER_OPEN_DEG);
+      Serial.println("Gripper: OPEN");
+
+    } else if (data == "GRIP_CLOSE") {
+      setGripper(GRIPPER_CLOSE_DEG);
+      Serial.println("Gripper: CLOSE");
+
+    } else if (data.startsWith("GRIP_")) {
+      // GRIP_xxx  → ตั้งองศาโดยตรง  เช่น  GRIP_90
+      int deg = data.substring(5).toInt();
+      deg = constrain(deg, 0, 180);
+      setGripper(deg);
+      Serial.print("Gripper: ");
+      Serial.print(deg);
+      Serial.println("deg");
 
     } else {
       int c1 = data.indexOf(',');
@@ -214,9 +267,25 @@ int angleToPWM(float angle) {
 //    wristServoDeg = 90 + wristCompDeg + wristOffset
 // ============================================================
 void calculateAndMoveIK(float x, float y, float z, float wristOffset) {
+  // ── TCP Offset Compensation ─────────────────────────────
+  // gripper เยื้องในกรอบ end-effector → หมุนกลับด้วยมุม base (theta1)
+  // เพื่อชดเชยใน world frame ก่อนคำนวณ IK
+  //
+  //   arm direction  : ( cos(t1),  sin(t1) )
+  //   left direction : (-sin(t1),  cos(t1) )
+  //
+  //   offset_world_x = OFFSET_A*cos(t1) - OFFSET_L*sin(t1)
+  //   offset_world_y = OFFSET_A*sin(t1) + OFFSET_L*cos(t1)
+  // ────────────────────────────────────────────────────────
+  float t1_est = atan2(y, x); // ประมาณมุม base จาก target
+  float cos1 = cos(t1_est);
+  float sin1 = sin(t1_est);
+  float xc = x - (GRIPPER_OFFSET_A * cos1 - GRIPPER_OFFSET_L * sin1);
+  float yc = y - (GRIPPER_OFFSET_A * sin1 + GRIPPER_OFFSET_L * cos1);
+
   // Wrist joint = เลื่อน tip ขึ้นไป L4 ในแกน Z
-  float wx = x;
-  float wy = y;
+  float wx = xc;
+  float wy = yc;
   float wz = z + L4;
 
   float r_w = sqrt(wx * wx + wy * wy);
@@ -250,10 +319,10 @@ void calculateAndMoveIK(float x, float y, float z, float wristOffset) {
   currentAngleElbow = theta3 * (180.0 / PI);
   currentAngleWrist = wristServoDeg;
 
-  pwm.setPWM(0, 0, angleToPWM(currentAngleBase));
-  pwm.setPWM(1, 0, angleToPWM(currentAngleShoulder));
-  pwm.setPWM(2, 0, angleToPWM(currentAngleElbow));
-  pwm.setPWM(3, 0, angleToPWM(currentAngleWrist));
+  pwm.setPWM(0, 0, angleToPWM(currentAngleBase + (OFFSET_BASE - 90)));
+  pwm.setPWM(1, 0, angleToPWM(currentAngleShoulder + (OFFSET_SHOULDER - 90)));
+  pwm.setPWM(2, 0, angleToPWM(currentAngleElbow + (OFFSET_ELBOW - 90)));
+  pwm.setPWM(3, 0, angleToPWM(currentAngleWrist + (OFFSET_WRIST - 90)));
 }
 
 // ============================================================
@@ -271,10 +340,17 @@ void moveToHome90() {
     float t = (float)i / 100.0;
     float ease = t * t * (3.0 - 2.0 * t); // smoothstep
 
-    pwm.setPWM(0, 0, angleToPWM(startB + (90.0 - startB) * ease));
-    pwm.setPWM(1, 0, angleToPWM(startS + (90.0 - startS) * ease));
-    pwm.setPWM(2, 0, angleToPWM(startE + (90.0 - startE) * ease));
-    pwm.setPWM(3, 0, angleToPWM(startW + (90.0 - startW) * ease));
+    pwm.setPWM(
+        0, 0, angleToPWM(startB + (90.0 - startB) * ease + (OFFSET_BASE - 90)));
+    pwm.setPWM(
+        1, 0,
+        angleToPWM(startS + (90.0 - startS) * ease + (OFFSET_SHOULDER - 90)));
+    pwm.setPWM(
+        2, 0,
+        angleToPWM(startE + (90.0 - startE) * ease + (OFFSET_ELBOW - 90)));
+    pwm.setPWM(
+        3, 0,
+        angleToPWM(startW + (90.0 - startW) * ease + (OFFSET_WRIST - 90)));
     delay(20);
   }
 
@@ -294,4 +370,13 @@ void moveToHome90() {
     Serial.read();
   }
   Serial.println("Home complete!");
+}
+
+// ============================================================
+//  ควบคุม Gripper Servo (GPIO 15)
+//  deg: 0–180  (GRIPPER_OPEN_DEG = เปิด, GRIPPER_CLOSE_DEG = ปิด)
+// ============================================================
+void setGripper(int deg) {
+  deg = constrain(deg, 0, 180);
+  gripperServo.write(deg);
 }

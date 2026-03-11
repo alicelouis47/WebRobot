@@ -221,15 +221,108 @@ function App() {
     }).catch(err => console.error("Error sending move command:", err));
   };
 
+  const [isExecutingSequence, setIsExecutingSequence] = useState(false);
+
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const executeSequence = async (sequence) => {
+    for (const step of sequence) {
+      console.log('PickPlace Step:', step.desc);
+      switch (step.action) {
+        case 'move':
+          setPosition({ x: step.x, y: step.y, z: step.z });
+          await fetch(`${DETECTION_SERVER}/robot/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x: step.x, y: step.y, z: step.z })
+          });
+          await delay(1000);
+          break;
+        case 'grab':
+          await fetch(`${DETECTION_SERVER}/robot/gripper`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'close' })
+          });
+          await delay(500);
+          break;
+        case 'release':
+          await fetch(`${DETECTION_SERVER}/robot/gripper`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'open' })
+          });
+          await delay(500);
+          break;
+        case 'home':
+          setPosition({ x: 0, y: 120, z: 85 });
+          await fetch(`${DETECTION_SERVER}/robot/home`, { method: 'POST' });
+          await delay(1000);
+          break;
+        default:
+          break;
+      }
+    }
+  };
+
+  const handleExecutePickPlace = async (objectId, dropX, dropY, dropZ) => {
+    if (isExecutingSequence) {
+      alert('Sequence already running');
+      return;
+    }
+
+    setIsExecutingSequence(true);
+    console.log('Starting pick & place sequence...');
+
+    try {
+      // Get pick sequence
+      const pickResponse = await fetch(`${DETECTION_SERVER}/pick_sequence/${objectId}`);
+      const pickData = await pickResponse.json();
+
+      // Get place sequence
+      const placeResponse = await fetch(`${DETECTION_SERVER}/place_sequence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: dropX, y: dropY, z: dropZ })
+      });
+      const placeData = await placeResponse.json();
+
+      if (pickData.success && placeData.success) {
+        const fullSequence = [...pickData.sequence, ...placeData.sequence];
+        await executeSequence(fullSequence);
+        console.log('Pick & Place complete!');
+      } else {
+        alert('Failed to generate full sequence');
+      }
+    } catch (error) {
+      console.error('Pick & Place error:', error);
+      alert('Pick & Place failed');
+    } finally {
+      setIsExecutingSequence(false);
+    }
+  };
+
   const handleAction = async (action) => {
     console.log(`Action: ${action}`);
-    if (action === 'home') {
-      try {
+    try {
+      if (action === 'home') {
         await fetch(`${DETECTION_SERVER}/robot/home`, { method: 'POST' });
         setPosition({ x: 0, y: 120, z: 85 });
-      } catch(err) {
-        console.error("Home command error:", err);
+      } else if (action === 'grab') {
+        await fetch(`${DETECTION_SERVER}/robot/gripper`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'close' })
+        });
+      } else if (action === 'release') {
+        await fetch(`${DETECTION_SERVER}/robot/gripper`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'open' })
+        });
       }
+    } catch(err) {
+      console.error(`Action ${action} error:`, err);
     }
   };
 
@@ -293,7 +386,7 @@ function App() {
               onModelSwitch={handleModelSwitch}
               isModelSwitching={isModelSwitching}
               detectedObjects={detectedObjects}
-              onExecutePickPlace={() => { }}
+              onExecutePickPlace={handleExecutePickPlace}
             />
             <ArucoCalibration
               arucoStatus={arucoStatus}

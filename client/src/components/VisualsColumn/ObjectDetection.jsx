@@ -5,6 +5,19 @@ function ObjectDetection({
     selectedCamera, setSelectedCamera, availableModels, selectedModel,
     onModelSwitch, isModelSwitching, detectedObjects, onExecutePickPlace
 }) {
+    const [selectedObjId, setSelectedObjId] = React.useState(null);
+
+    const handleExecute = () => {
+        const dropX = parseInt(document.getElementById('dropX').value) || 50;
+        const dropY = parseInt(document.getElementById('dropY').value) || 0;
+        const dropZ = parseInt(document.getElementById('dropZ').value) || 10;
+        if (selectedObjId !== null) {
+            onExecutePickPlace(selectedObjId, dropX, dropY, dropZ);
+        } else {
+            alert('Please select an object first');
+        }
+    };
+
     return (
         <section className="camera-panel glass-panel">
             <div className="viz-header">
@@ -80,7 +93,11 @@ function ObjectDetection({
                         <p className="no-objects">No objects detected</p>
                     ) : (
                         detectedObjects.map((obj, i) => (
-                            <div key={i} className="object-item">
+                            <div 
+                                key={i} 
+                                className={`object-item ${selectedObjId === obj.id ? 'selected' : ''}`}
+                                onClick={() => setSelectedObjId(obj.id)}
+                            >
                                 <div className="object-info">
                                     <span className="object-name">{obj.class}</span>
                                     <span className="object-coords">X:{obj.robot_coords.x} Y:{obj.robot_coords.y}</span>
@@ -103,7 +120,12 @@ function ObjectDetection({
                             <input type="number" id="dropZ" defaultValue="10" placeholder="Z" />
                         </div>
                     </div>
-                    <button className="btn-action btn-pick" id="btnPickPlace" onClick={onExecutePickPlace}>
+                    <button 
+                        className="btn-action btn-pick" 
+                        id="btnPickPlace" 
+                        onClick={handleExecute}
+                        disabled={selectedObjId === null}
+                    >
                         <span className="btn-icon">🤖</span>
                         <span className="btn-text">Execute Pick & Place</span>
                     </button>
