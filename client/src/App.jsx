@@ -212,12 +212,14 @@ function App() {
     const newPos = { ...position, [axis]: value };
     setPosition(newPos);
     
-    // Only send to robot if connected backend
-    // Since sliders can fire rapidly, React state update is fine. Let's fire the API call directly.
+    // Swap X and Y for the robot command
+    const robotX = newPos.y;
+    const robotY = newPos.x;
+    
     fetch(`${DETECTION_SERVER}/robot/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ x: newPos.x, y: newPos.y, z: newPos.z })
+        body: JSON.stringify({ x: robotX, y: robotY, z: newPos.z })
     }).catch(err => console.error("Error sending move command:", err));
   };
 
@@ -231,11 +233,17 @@ function App() {
       switch (step.action) {
         case 'move':
           setPosition({ x: step.x, y: step.y, z: step.z });
-          await fetch(`${DETECTION_SERVER}/robot/move`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ x: step.x, y: step.y, z: step.z })
-          });
+          
+          // Swap X and Y for the robot command
+          {
+            const robotX = step.y;
+            const robotY = step.x;
+            await fetch(`${DETECTION_SERVER}/robot/move`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ x: robotX, y: robotY, z: step.z })
+            });
+          }
           await delay(1000);
           break;
         case 'grab':

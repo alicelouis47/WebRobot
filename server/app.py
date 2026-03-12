@@ -63,34 +63,34 @@ CONFIG = {
     'workspace_y_min': -148.5, # -297/2
     'workspace_y_max': 148.5,  # 297/2
     'pick_height': 10,        # Height when picking object
-    'safe_height': 80,        # Safe travel height
+    'safe_height': 100,        # Safe travel height (increased by 10mm)
     
     # ArUco Marker Configuration
     'aruco_dict_type': cv2.aruco.DICT_4X4_50,
     'marker_size_mm': 30,     # Physical marker size in mm
-    # Expected marker IDs based on A4 configuration:
-    # [Top edge of A4 paper - Landscape 297x210mm]
-    #   | 4 cm 
-    #  [0]------- 12 cm -------[1]  <- Furthest from robot (Top)
+    # Expected marker IDs based on A4 configuration (Robot at TOP):
+    # [Top edge of A4 paper - Landscape 297x210mm] <- Closest to robot
+    #   | 3 cm
+    #  [0]------- 11.2 cm -------[1]
     #   |                       |
-    #  8 cm                    8 cm
+    #  7.5 cm                    7.5 cm
     #   |                       |
-    #  [2]------- 12 cm -------[3]  <- Closest to robot (Bottom)
+    #  [2]------- 11.2 cm -------[3]  <- Furthest from robot
     'marker_ids': [0, 1, 2, 3],
     
     # Real-world coordinates of marker centers (mm) relative to robot base
-    # Robot is at (0,0). X axis is Forward, Y axis is Left.
-    # We assume A4 paper (Landscape) is placed with its bottom edge at X = 50 mm from the robot base.
+    # Robot is at (0,0). X axis is Forward (down the paper), Y axis is Left.
+    # We assume A4 paper (Landscape) is placed with its top edge at X = 50 mm from the robot base.
     # Center of paper is at Y = 0.
-    # Top edge X = 50 + 210 = 260 mm. 
-    # ID:0 and ID:1 are 4 cm (40 mm) from top edge -> X = 260 - 40 = 220 mm.
-    # ID:2 and ID:3 are 8 cm (80 mm) closer than ID:0 -> X = 220 - 80 = 140 mm.
-    # Y-axis is centered. Width = 120 mm -> Left is +60 mm, Right is -60 mm.
+    # Top edge X = 50 mm, Bottom edge X = 50 + 210 = 260 mm. 
+    # ID:0 and ID:1 are 30 mm from top edge and add to center of qr-> X = 50 + 30 +15 = 95 mm.
+    # ID:2 and ID:3 are 105 mm further than ID:0 -> X = 95 + 105 = 200 mm.
+    # Y-axis is centered. Facing down the paper, ID1 & ID3 are on the Left (+Y), ID0 & ID2 are on the Right (-Y).
     'marker_real_coords': {
-        0: (230, 56),    # Top-Left (ID:0)
-        1: (230, -56),   # Top-Right (ID:1)
-        2: (150, 56),    # Bottom-Left (ID:2)
-        3: (150, -56),   # Bottom-Right (ID:3)
+        0: (95, -56),    # Top-Left (ID:0)
+        1: (95, 56),     # Top-Right (ID:1)
+        2: (200, -56),   # Bottom-Left (ID:2)
+        3: (200, 56),    # Bottom-Right (ID:3)
     },
 }
 
@@ -842,7 +842,17 @@ async def robot_move(request: Request):
             cmd = f"{int(x)},{int(y)},{int(z)}\n"
             try:
                 state.robot_serial.write(cmd.encode())
-                return {'success': True, 'cmd': cmd.strip()}
+                
+                # Wait for DONE response from Arduino (interpolation complete)
+                start_time = time.time()
+                while time.time() - start_time < 10.0:  # 10s max timeout for long moves
+                    if state.robot_serial.in_waiting > 0:
+                        line = state.robot_serial.readline().decode('utf-8', errors='ignore').strip()
+                        if line == "DONE":
+                            return {'success': True, 'cmd': cmd.strip(), 'status': 'done'}
+                    time.sleep(0.01)
+                    
+                return {'success': True, 'cmd': cmd.strip(), 'warning': 'Timeout waiting for DONE'}
             except Exception as e:
                 return JSONResponse(status_code=500, content={'error': str(e)})
         else:
@@ -871,9 +881,9 @@ async def robot_gripper(request: Request):
         if state.robot_serial and state.robot_serial.is_open:
             try:
                 if action == 'open':
-                    state.robot_serial.write(b"GRIP_OPEN")
+                    state.robot_serial.write(b"GRIP_OPEN\n")
                 elif action == 'close':
-                    state.robot_serial.write(b"GRIP_CLOSE")
+                    state.robot_serial.write(b"GRIP_CLOSE\n")
                 return {'success': True, 'action': action}
             except Exception as e:
                 return JSONResponse(status_code=500, content={'error': str(e)})

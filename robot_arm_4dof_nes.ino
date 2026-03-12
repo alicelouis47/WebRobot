@@ -49,8 +49,8 @@ const float L4 = 130.0;
 //  GRIPPER_CLOSE_DEG = องศาปิด gripper (หยิบวัตถุ)
 // ============================================================
 #define GRIPPER_PIN 15
-#define GRIPPER_OPEN_DEG 0   // ปรับตามหุ่นจริง
-#define GRIPPER_CLOSE_DEG 50 // ปรับตามหุ่นจริง
+#define GRIPPER_OPEN_DEG 60   // ปรับตามหุ่นจริง
+#define GRIPPER_CLOSE_DEG 115 // ปรับตามหุ่นจริง
 
 Servo gripperServo;
 
@@ -63,7 +63,7 @@ Servo gripperServo;
 //
 //  หากวัดได้ว่าเยื้องทิศตรงข้าม ให้ใส่ค่าลบ เช่น -30.0
 // ============================================================
-#define GRIPPER_OFFSET_L 30.0f // ชดเชยซ้าย-ขวา (mm)  ซ้าย = บวก
+#define GRIPPER_OFFSET_L 15.0f // ชดเชยซ้าย-ขวา (mm)  ซ้าย = บวก
 #define GRIPPER_OFFSET_A 10.0f // ชดเชยหน้า-หลัง (mm)  หน้า = บวก
 
 // ============================================================
@@ -190,6 +190,7 @@ void loop() {
         targetX = data.substring(0, c1).toFloat();
         targetY = data.substring(c1 + 1, c2).toFloat();
         targetZ = data.substring(c2 + 1).toFloat();
+        Serial.println("ACK:MOVE");
       }
     }
 
@@ -199,12 +200,14 @@ void loop() {
   }
 
   // ── Interpolation ─────────────────────────────────────────
+  static bool isMoving = false;
   float dx = targetX - currentX;
   float dy = targetY - currentY;
   float dz = targetZ - currentZ;
   float distance = sqrt(dx * dx + dy * dy + dz * dz);
 
   if (distance > stepSize) {
+    isMoving = true;
     currentX += (dx / distance) * stepSize;
     currentY += (dy / distance) * stepSize;
     currentZ += (dz / distance) * stepSize;
@@ -212,13 +215,20 @@ void loop() {
     delay(speedDelay);
 
   } else if (distance > 0.001) {
+    isMoving = true;
     currentX = targetX;
     currentY = targetY;
     currentZ = targetZ;
     calculateAndMoveIK(currentX, currentY, currentZ, wristTiltOffset);
+    // Almost there, let loop run once more to reach exact 0
 
   } else {
-    // ถึงเป้าแล้ว แต่ยัง re-apply ทุก loop เพื่อ track ค่า pot
+    // ถึงเป้าแล้ว
+    if (isMoving) {
+      isMoving = false;
+      Serial.println("DONE"); // ส่งสัญญาณบอก Python ว่าถึงเป้าหมายแล้ว
+    }
+    // แต่ยัง re-apply ทุก loop เพื่อ track ค่า pot
     calculateAndMoveIK(currentX, currentY, currentZ, wristTiltOffset);
     delay(speedDelay);
   }
