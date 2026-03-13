@@ -16,7 +16,7 @@ function App() {
   const [connected, setConnected] = useState(false);
   const [viewMode, setViewMode] = useState('side');
 
-  const [position, setPosition] = useState({ x: 0, y: 0, z: 50 });
+  const [position, setPosition] = useState({ x: 120, y: 0, z: 85 });
   const [angles, setAngles] = useState([90, 90, 90, 90, 90]);
 
   const [cameraActive, setCameraActive] = useState(false);
@@ -212,14 +212,10 @@ function App() {
     const newPos = { ...position, [axis]: value };
     setPosition(newPos);
     
-    // Swap X and Y for the robot command
-    const robotX = newPos.y;
-    const robotY = newPos.x;
-    
     fetch(`${DETECTION_SERVER}/robot/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ x: robotX, y: robotY, z: newPos.z })
+        body: JSON.stringify({ x: newPos.x, y: newPos.y, z: newPos.z })
     }).catch(err => console.error("Error sending move command:", err));
   };
 
@@ -234,16 +230,11 @@ function App() {
         case 'move':
           setPosition({ x: step.x, y: step.y, z: step.z });
           
-          // Swap X and Y for the robot command
-          {
-            const robotX = step.y;
-            const robotY = step.x;
-            await fetch(`${DETECTION_SERVER}/robot/move`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ x: robotX, y: robotY, z: step.z })
-            });
-          }
+          await fetch(`${DETECTION_SERVER}/robot/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x: step.x, y: step.y, z: step.z })
+          });
           await delay(1000);
           break;
         case 'grab':
@@ -263,7 +254,7 @@ function App() {
           await delay(500);
           break;
         case 'home':
-          setPosition({ x: 0, y: 120, z: 85 });
+          setPosition({ x: 120, y: 0, z: 85 });
           await fetch(`${DETECTION_SERVER}/robot/home`, { method: 'POST' });
           await delay(1000);
           break;
@@ -315,7 +306,7 @@ function App() {
     try {
       if (action === 'home') {
         await fetch(`${DETECTION_SERVER}/robot/home`, { method: 'POST' });
-        setPosition({ x: 0, y: 120, z: 85 });
+        setPosition({ x: 120, y: 0, z: 85 });
       } else if (action === 'grab') {
         await fetch(`${DETECTION_SERVER}/robot/gripper`, { 
           method: 'POST',

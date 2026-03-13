@@ -52,7 +52,7 @@ def solve_ik(x: float, y: float, z: float):
     r = math.sqrt(wx*wx + wy*wy)
     if r < 1e-6:
         return None
-    theta1 = math.atan2(wy, wx)
+    t1_math = math.atan2(wy, wx)
     z_adj  = wz - L1
     d      = math.sqrt(r*r + z_adj*z_adj)
     if d > (L2 + L3):
@@ -65,7 +65,8 @@ def solve_ik(x: float, y: float, z: float):
     theta2 = alpha + beta
     wrist_comp  = (theta2 - theta3)
     wrist_servo = max(0.0, min(180.0, 90.0 + math.degrees(wrist_comp)))
-    return (math.degrees(theta1), math.degrees(theta2),
+    theta1_deg = max(0.0, min(180.0, 90.0 + math.degrees(t1_math)))
+    return (theta1_deg, math.degrees(theta2),
             math.degrees(theta3), wrist_servo)
 
 
@@ -86,7 +87,10 @@ def fk_joints(x: float, y: float, z: float, wrist_offset_deg: float = 0.0):
     angles = solve_ik(x, y, z)
     if angles is None:
         return None
-    t1, t2, t3, _ = [math.radians(a) for a in angles]
+    t1_deg, t2_deg, t3_deg, _ = angles
+    t1 = math.radians(t1_deg - 90.0)
+    t2 = math.radians(t2_deg)
+    t3 = math.radians(t3_deg)
     wo = math.radians(wrist_offset_deg)   # wrist tilt offset
 
     p0 = np.array([0.0, 0.0, 0.0])
@@ -141,8 +145,8 @@ class RobotSimApp:
         self.root.title("🤖 Robot Arm – Real-time 3D Simulation")
         self.root.configure(bg="#1a1a2e")
 
-        self.current = np.array([0.0, 120.0, 85.0])
-        self.target  = np.array([0.0, 120.0, 85.0])
+        self.current = np.array([120.0, 0.0, 85.0])
+        self.target  = np.array([120.0, 0.0, 85.0])
         # wrist_tilt_offset: จำลองค่า pin 13  (−60 ถึง +60°)
         self.wrist_tilt_offset = 0.0
         self.lock = threading.Lock()
@@ -220,8 +224,8 @@ class RobotSimApp:
             sv.pack()
             return sv
 
-        self.sl_x = make_slider(tab_slider, "X  –  ซ้าย / ขวา  (mm)", -200, 200,   0)
-        self.sl_y = make_slider(tab_slider, "Y  –  หน้า / หลัง  (mm)",   30, 350, 120)
+        self.sl_x = make_slider(tab_slider, "X  –  หน้า / หลัง  (mm)", 0, 230,   120)
+        self.sl_y = make_slider(tab_slider, "Y  –  ซ้าย / ขวา   (mm)", -175, 175, 0)
         self.sl_z = make_slider(tab_slider, "Z  –  ขึ้น / ลง    (mm)",    0, 200,  85)
 
         # ── Wrist: ล็อกตั้งฉากพื้นเสมอ ──────────────────────
@@ -265,8 +269,8 @@ class RobotSimApp:
                      bg=CARD, fg="#888888").pack(side="left", padx=(4, 0))
             return ent
 
-        self.ent_x = make_entry_row(tab_ik, "X:",  0)
-        self.ent_y = make_entry_row(tab_ik, "Y:",  120)
+        self.ent_x = make_entry_row(tab_ik, "X:",  120)
+        self.ent_y = make_entry_row(tab_ik, "Y:",  0)
         self.ent_z = make_entry_row(tab_ik, "Z:",  85)
 
         self.lbl_ik_result = tk.Label(tab_ik, text="",
@@ -319,7 +323,7 @@ class RobotSimApp:
         self.canvas = FigureCanvasTkAgg(self.fig, master=right)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        self._update_labels(0, 120, 85)
+        self._update_labels(120, 0, 85)
 
     # ----------------------------------------------------------
     def _setup_axes(self):
@@ -384,8 +388,8 @@ class RobotSimApp:
         with self.lock:
             self.target = np.array([x, y, z])
 
-        self.sl_x.set(int(max(-200, min(200, x))))
-        self.sl_y.set(int(max(30,   min(350, y))))
+        self.sl_x.set(int(max(0,   min(230, x))))
+        self.sl_y.set(int(max(-175, min(175, y))))
         self.sl_z.set(int(max(0,    min(200, z))))
 
         self._send_serial(x, y, z)
@@ -393,12 +397,12 @@ class RobotSimApp:
 
     # ----------------------------------------------------------
     def _set_home(self):
-        self.sl_x.set(0)
-        self.sl_y.set(120)
+        self.sl_x.set(120)
+        self.sl_y.set(0)
         self.sl_z.set(85)
         self.sl_w.set(0)
         with self.lock:
-            self.target = np.array([0.0, 120.0, 85.0])
+            self.target = np.array([120.0, 0.0, 85.0])
             self.wrist_tilt_offset = 0.0
         if self.ser:
             try:

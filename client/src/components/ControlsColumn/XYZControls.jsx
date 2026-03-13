@@ -21,7 +21,7 @@ function XYZControls({ position, onPositionChange }) {
                 {/* X Axis */}
                 <div className="axis-control" data-axis="x">
                     <div className="axis-header">
-                        <span className="axis-label x-axis">X AXIS</span>
+                        <span className="axis-label x-axis">X (Forward/Back)</span>
                         <span className="axis-value" id="xValue">{position.x}</span>
                         <span className="axis-unit">mm</span>
                     </div>
@@ -30,7 +30,7 @@ function XYZControls({ position, onPositionChange }) {
                         <input
                             type="range"
                             className="slider x-slider"
-                            min="-175" max="175"
+                            min="0" max="230"
                             value={position.x}
                             onChange={(e) => handleSliderChange('x', e.target.value)}
                         />
@@ -40,7 +40,7 @@ function XYZControls({ position, onPositionChange }) {
                         type="number"
                         className="axis-input"
                         value={position.x}
-                        min="-175" max="175"
+                        min="0" max="230"
                         onChange={(e) => handleInputChange('x', e.target.value)}
                     />
                 </div>
@@ -48,7 +48,7 @@ function XYZControls({ position, onPositionChange }) {
                 {/* Y Axis */}
                 <div className="axis-control" data-axis="y">
                     <div className="axis-header">
-                        <span className="axis-label y-axis">Y AXIS</span>
+                        <span className="axis-label y-axis">Y (Left/Right)</span>
                         <span className="axis-value" id="yValue">{position.y}</span>
                         <span className="axis-unit">mm</span>
                     </div>
@@ -57,7 +57,7 @@ function XYZControls({ position, onPositionChange }) {
                         <input
                             type="range"
                             className="slider y-slider"
-                            min="0" max="230"
+                            min="-175" max="175"
                             value={position.y}
                             onChange={(e) => handleSliderChange('y', e.target.value)}
                         />
@@ -67,7 +67,7 @@ function XYZControls({ position, onPositionChange }) {
                         type="number"
                         className="axis-input"
                         value={position.y}
-                        min="0" max="230"
+                        min="-175" max="175"
                         onChange={(e) => handleInputChange('y', e.target.value)}
                     />
                 </div>

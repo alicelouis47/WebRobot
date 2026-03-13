@@ -8,9 +8,9 @@ function ObjectDetection({
     const [selectedObjId, setSelectedObjId] = React.useState(null);
 
     const handleExecute = () => {
-        const dropX = parseInt(document.getElementById('dropX').value) || 50;
-        const dropY = parseInt(document.getElementById('dropY').value) || 0;
-        const dropZ = parseInt(document.getElementById('dropZ').value) || 10;
+        const dropX = parseInt(document.getElementById('dropX').value) || 100;
+        const dropY = parseInt(document.getElementById('dropY').value) || 100;
+        const dropZ = parseInt(document.getElementById('dropZ').value) || 20;
         if (selectedObjId !== null) {
             onExecutePickPlace(selectedObjId, dropX, dropY, dropZ);
         } else {
@@ -115,9 +115,9 @@ function ObjectDetection({
                     <div className="target-position">
                         <label>Drop Target:</label>
                         <div className="target-inputs">
-                            <input type="number" id="dropX" defaultValue="50" placeholder="X" />
-                            <input type="number" id="dropY" defaultValue="0" placeholder="Y" />
-                            <input type="number" id="dropZ" defaultValue="10" placeholder="Z" />
+                            <input type="number" id="dropX" defaultValue="100" placeholder="X" />
+                            <input type="number" id="dropY" defaultValue="100" placeholder="Y" />
+                            <input type="number" id="dropZ" defaultValue="20" placeholder="Z" />
                         </div>
                     </div>
                     <button 

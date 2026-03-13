@@ -62,7 +62,7 @@ CONFIG = {
     'workspace_x_max': 260,   # 50 + 210
     'workspace_y_min': -148.5, # -297/2
     'workspace_y_max': 148.5,  # 297/2
-    'pick_height': 10,        # Height when picking object
+    'pick_height': 20,        # Height when picking object
     'safe_height': 100,        # Safe travel height (increased by 10mm)
     
     # ArUco Marker Configuration
@@ -87,10 +87,10 @@ CONFIG = {
     # ID:2 and ID:3 are 105 mm further than ID:0 -> X = 95 + 105 = 200 mm.
     # Y-axis is centered. Facing down the paper, ID1 & ID3 are on the Left (+Y), ID0 & ID2 are on the Right (-Y).
     'marker_real_coords': {
-        0: (95, -56),    # Top-Left (ID:0)
-        1: (95, 56),     # Top-Right (ID:1)
-        2: (200, -56),   # Bottom-Left (ID:2)
-        3: (200, 56),    # Bottom-Right (ID:3)
+        0: (95, -56),     # Top-Left (ID:0)
+        1: (95, 56),    # Top-Right (ID:1)
+        2: (200, -56),    # Bottom-Left (ID:2)
+        3: (200, 56),   # Bottom-Right (ID:3)
     },
 }
 
@@ -287,10 +287,10 @@ def pixel_to_robot_coords(px, py):
     cy = CONFIG['frame_height'] / 2
     
     dx = px - cx
-    dy = cy - py  # Y is inverted
-    
+    dy = py - cy  # Y axis positive/negative is flipped
+
     x_mm = dx / CONFIG['pixels_per_mm'] + CONFIG['camera_offset_x']
-    y_mm = dy / CONFIG['pixels_per_mm'] + CONFIG['camera_offset_y']
+    y_mm = -dy / CONFIG['pixels_per_mm'] + CONFIG['camera_offset_y']
     
     x_mm = max(CONFIG['workspace_x_min'], min(CONFIG['workspace_x_max'], x_mm))
     y_mm = max(CONFIG['workspace_y_min'], min(CONFIG['workspace_y_max'], y_mm))

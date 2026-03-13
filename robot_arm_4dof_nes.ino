@@ -75,8 +75,8 @@ int speedDelay = 15;  // ms ต่อ loop
 // ============================================================
 //  พิกัดปัจจุบัน และเป้าหมาย
 // ============================================================
-float currentX = 0.0, currentY = 120.0, currentZ = 85.0;
-float targetX = 0.0, targetY = 120.0, targetZ = 85.0;
+float currentX = 120.0, currentY = 0.0, currentZ = 85.0;
+float targetX = 120.0, targetY = 0.0, targetZ = 85.0;
 
 // ============================================================
 //  มุมปัจจุบันของเซอร์โว
@@ -136,10 +136,10 @@ void setup() {
   currentAngleElbow = 90.0;
   currentAngleWrist = 90.0;
 
-  currentX = 0.0;
-  targetX = 0.0;
-  currentY = 120.0;
-  targetY = 120.0;
+  currentX = 120.0;
+  targetX = 120.0;
+  currentY = 0.0;
+  targetY = 0.0;
   currentZ = 85.0;
   targetZ = 85.0;
 
@@ -287,9 +287,9 @@ void calculateAndMoveIK(float x, float y, float z, float wristOffset) {
   //   offset_world_x = OFFSET_A*cos(t1) - OFFSET_L*sin(t1)
   //   offset_world_y = OFFSET_A*sin(t1) + OFFSET_L*cos(t1)
   // ────────────────────────────────────────────────────────
-  float t1_est = atan2(y, x); // ประมาณมุม base จาก target
-  float cos1 = cos(t1_est);
-  float sin1 = sin(t1_est);
+  float t1_math = atan2(y, x); // ประมาณมุม base จาก target (X=Forward, Y=Left)
+  float cos1 = cos(t1_math);
+  float sin1 = sin(t1_math);
   float xc = x - (GRIPPER_OFFSET_A * cos1 - GRIPPER_OFFSET_L * sin1);
   float yc = y - (GRIPPER_OFFSET_A * sin1 + GRIPPER_OFFSET_L * cos1);
 
@@ -302,7 +302,6 @@ void calculateAndMoveIK(float x, float y, float z, float wristOffset) {
   if (r_w < 0.001f)
     return;
 
-  float theta1 = atan2(wy, wx);
   float r = r_w;
   float z_adj = wz - L1;
   float d = sqrt(r * r + z_adj * z_adj);
@@ -323,8 +322,11 @@ void calculateAndMoveIK(float x, float y, float z, float wristOffset) {
   float wristServoDeg = 90.0 + wristCompDeg + wristOffset; // + offset ก้มเงย
   wristServoDeg = constrain(wristServoDeg, 0.0, 180.0);
 
-  // อัปเดตมุมปัจจุบัน
-  currentAngleBase = theta1 * (180.0 / PI);
+  // อัปเดตมุมปัจจุบัน (90.0 คือการชี้ตรงไปข้างหน้าแกน X)
+  float theta1_deg = 90.0f + (t1_math * 180.0f / PI);
+  theta1_deg = constrain(theta1_deg, 0.0f, 180.0f);
+  
+  currentAngleBase = theta1_deg;
   currentAngleShoulder = theta2 * (180.0 / PI);
   currentAngleElbow = theta3 * (180.0 / PI);
   currentAngleWrist = wristServoDeg;
@@ -369,10 +371,10 @@ void moveToHome90() {
   currentAngleElbow = 90.0;
   currentAngleWrist = 90.0;
 
-  currentX = 0.0;
-  targetX = 0.0;
-  currentY = 120.0;
-  targetY = 120.0;
+  currentX = 120.0;
+  targetX = 120.0;
+  currentY = 0.0;
+  targetY = 0.0;
   currentZ = 85.0;
   targetZ = 85.0;
 
