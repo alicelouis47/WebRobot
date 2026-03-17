@@ -1,217 +1,132 @@
-# 🤖 ESP32 Robot Arm Controller
+# 🤖 WebRobot Arm Controller
 
-ระบบควบคุมแขนกล 4 แกน (4-DOF) + Gripper ผ่าน Web Interface โดยใช้ ESP32 และ Servo 5 ตัว ตามโครงสร้าง URDF
+ระบบควบคุมแขนกล 4 แกน (4-DOF) + Gripper ผ่าน Web Interface ด้วย React Frontend, Python FastAPI Backend สำหรับ Object Detection (YOLOv11/YOLO26) และ ESP32 ควบคุม Servo ผ่านการสื่อสาร Serial (USB) 
 
-![Robot Arm Control](https://img.shields.io/badge/ESP32-Robot%20Arm-blue?style=for-the-badge)
-![WebSocket](https://img.shields.io/badge/Protocol-WebSocket-green?style=for-the-badge)
-![YOLOv11](https://img.shields.io/badge/Detection-YOLOv11-purple?style=for-the-badge)
+![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-blue?style=for-the-badge&logo=react)
+![FastAPI](https://img.shields.io/badge/Backend-FastAPI-green?style=for-the-badge&logo=fastapi)
+![ESP32](https://img.shields.io/badge/Microcontroller-ESP32-yellow?style=for-the-badge)
+![YOLO](https://img.shields.io/badge/Detection-YOLOv11-purple?style=for-the-badge)
 
 ## ⚡ Features
 
-- 🎮 **Web-based Control** — ควบคุมผ่าน Browser (React Frontend)
-- 📍 **XYZ Coordinates** — ใส่พิกัด XYZ แล้ว Inverse Kinematics คำนวณมุม Servo อัตโนมัติ (4 joints)
-- 📡 **Real-time WebSocket** — การสื่อสารแบบ Real-time ความหน่วงต่ำ
-- 🎨 **Modern UI** — สร้างด้วย React + Vite พร้อม Premium dark theme และ Micro-animations
-- 📊 **Servo Visualization** — แสดงมุม Servo 4 ตัวพร้อม 3D visualization (Side/Top/Front/3D view)
-- 🛑 **Emergency Stop** — ปุ่มหยุดฉุกเฉิน
-- 📷 **Object Detection** — ตรวจจับวัตถุด้วย YOLOv11 ผ่าน USB Webcam
-- 📹 **Camera Selection** — เลือกระบุและสลับกล้องที่ใช้งานผ่านหน้า UI ได้สดๆ
-- 🎯 **ArUco Calibration** — ปรับเทียบพิกัดด้วย ArUco Markers สำหรับความแม่นยำสูง
-- 🤏 **Pick & Place** — ระบบหยิบ-วางอัตโนมัติโดยอ้างอิงจาก Object Detection
-- 👁️ **Hide WiFi Password** — สลับโหมดเปิด/ปิดหน้าตา/รหัสผ่าน Wi-Fi ของหุ่นยนต์ได้
+- 🎮 **Web-based Control** — ควบคุมแขนกลผ่านเบราว์เซอร์ด้วย React Dashboard 
+- 📍 **XYZ Inverse Kinematics** — สั่งงานเป็นพิกัดอ้างอิง XYZ แล้วให้ ESP32 คำนวณมุม Servo อัตโนมัติในพื้นที่ทำงาน (Workspace Bounds)
+- 🤖 **Serial Communication** — เชื่อมต่อกับ ESP32 ง่ายๆ ผ่านสาย USB มีระบบตรวจจับและเลือก COM Port ผ่านหน้า UI (FastAPI ทำหน้าที่เป็นตัวกลาง)
+- 🎯 **ArUco Calibration** — ปรับเทียบพิกัดโลกจริง (Real-World Coordinates) ง่ายๆ ผ่านกล้องและการทำ Homography วางกระดาษ A4 ลงกริต
+- 📷 **YOLO Object Detection** — สลับใช้โมเดล YOLOv11 และ YOLO26 สำหรับการตรวจจับชิ้นงาน และทำการหยิบวาง (Pick & Place)
+- 📹 **Camera & Model Selection** — เลือกระบุกล้อง USB/Webcam ที่ใช้งานจากระบบ และเลือกโมเดล (เช่น yolo11n.pt, yolo26.pt, best.pt) ได้บนหน้าเว็บ
+- 🧠 **PCA9685 PWM Controller** — ควบคุม Servo 4 แกนอย่างแม่นยำราบรื่นผ่านโมดูล PCA9685 ที่ต่อแบบ I2C เข้ากับ ESP32 ลดปัญหาไฟตกจาก ESP32
+- 🛑 **Emergency Stop / Home** — ปุ่มสั่งกลับตำแหน่ง 90 องศา หรือเปิด-ปิด Gripper ผ่าน Dashboard ทันที
 
-## 🦾 URDF Robot Arm Specifications
+---
 
-แขนกลใช้โครงสร้างตาม URDF (`URDF_Robot_arm/urdf/ufdr.urdf`) มี 4 Joints:
+## 🦾 System Architecture
 
-| Joint | ชื่อ URDF | Axis | ความหมาย | GPIO | Servo |
-|-------|-----------|------|----------|------|-------|
-| Joint0 | base_link → Link_1 | Y | **Waist** — หมุนฐาน | 13 | SG90 |
-| Joint1 | Link_1 → Link_2 | Z | **Shoulder** — ไหล่ | 12 | SG90 |
-| Joint2 | Link_2 → Link_3 | Z | **Elbow** — ข้อศอก | 14 | SG90 |
-| Joint3 | Link_3 → End | X | **Wrist** — ข้อมือ | 27 | **MG90s** |
-| — | — | — | **Gripper** — จับ/ปล่อย | 26 | **MG90s** |
+การทำงานของระบบถูกปรับปรุงใหม่ให้มีความเสถียรขึ้นและรับประกันการทำงานของโมเดล AI ที่มีขนาดใหญ่ โดยแบ่งเป็น 3 ชิ้นส่วน:
 
-### Arm Dimensions (จาก URDF)
+1. **Client (React + Vite)**: ทำหน้าที่แสดงภาพวิดีโอ (MJPEG) วาดจุด ArUco, กล่อง Bounding Box และคำสั่งสั่งงานต่างๆ
+2. **Server (FastAPI)**: ใช้กล้องเพื่อรัน YOLO และ ArUco สร้าง REST API และต่อ Serial/COM Port ไปหา ESP32 โดยตรง 
+3. **ESP32 Firmware**: รอรับคำสั่ง (X, Y, Z / HOME / GRIP_OPEN / GRIP_CLOSE) ที่ส่งผ่าน Serial (Baudrate `115200`) นำไปแปลงเป็น Inverse Kinematics แล้วสั่งให้ PCA9685 กับ ESP32Servo ขับมอเตอร์
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| `BASE_HEIGHT` | 56 mm | Joint0 z-offset |
-| `SHOULDER_OFFSET` | 42.6 mm | Joint1 offset |
-| `ARM_LENGTH_1` | 120 mm | Link_2 — ความยาวแขนส่วนบน |
-| `ARM_LENGTH_2` | 116.25 mm | Link_3 to End — ความยาวแขนส่วนล่าง |
+---
 
-## 🔧 Hardware Requirements
+## 🔧 Hardware Requirements & Wiring
 
-| Component | Specification |
-|-----------|--------------|
-| Microcontroller | ESP32 DevKit |
-| Servo Motors | SG90 × 3 (Waist, Shoulder, Elbow) |
-| Servo Motors | **MG90s** × 2 (Wrist, Gripper) |
-| USB Webcam | สำหรับ Object Detection (optional) |
-| Power Supply | 5V 2A (สำหรับ Servo) |
-| Jumper Wires | ตามความเหมาะสม |
+1. **ESP32 DevKit**
+2. **PCA9685 (I2C 16-Channel PWM)** — โมดูลควบคุมเซอร์โวเพื่อลดภาระกระแสให้กับโมดูล
+3. **Servo Motors** — 4 ตัวสำหรับแกน และ 1 ตัวสำหรับ Gripper
+4. **USB Power 5V** กระแสสูง (แยกส่วนสำหรับ Servo และ PCA9685)
+5. **USB Webcam** สำหรับการจับภาพจากมุม Top-Down 
 
-### Wiring Diagram
+### 📐 Wiring Diagram
+| Hardware Component | ESP32 Pin / Port | Type & Description |
+|-------------------|------------------|-------------------|
+| PCA9685 (SDA) | `GPIO 21` (SDA) | I2C Communication |
+| PCA9685 (SCL) | `GPIO 22` (SCL) | I2C Communication |
+| Servo 1 (Base/Waist)| PCA9685 `Ch 0` | ควบคุมการหมุนฐาน |
+| Servo 2 (Shoulder)| PCA9685 `Ch 1` | ควบคุมไหล่ |
+| Servo 3 (Elbow) | PCA9685 `Ch 2` | ควบคุมศอก |
+| Servo 4 (Wrist) | PCA9685 `Ch 3` | ควบคุมข้อมือ (Tilt Compensated) |
+| Servo 5 (Gripper)| `GPIO 15` | ESP32 Servo ควบคุมการจับวัตถุ |
 
-```
-ESP32 Pin   ->   Servo            URDF Joint       Type
-----------------------------------------------------------
-GPIO 13     ->   Servo 1          Joint0 (Waist)   SG90
-GPIO 12     ->   Servo 2          Joint1 (Shoulder) SG90
-GPIO 14     ->   Servo 3          Joint2 (Elbow)   SG90
-GPIO 27     ->   Servo 4          Joint3 (Wrist)   MG90s
-GPIO 26     ->   Servo 5          Gripper          MG90s
-5V          ->   Servo VCC        (ใช้ External Power)
-GND         ->   Servo GND
-```
+> ⚠️ **คำเตือนเรื่องพลังงาน**: จ่ายไฟ 5V นอกเข้าที่จุด *V+* ของบอร์ด PCA9685 และ Gripper (ไม่ต้องจ่ายไฟจากขา 5V/VIN ของ ESP32 เด็ดขาด เพื่อป้องกันบอร์ดพังและการ Reset อัตโนมัติระหว่างที่แขนทำงาน)
 
-> ⚠️ **สำคัญ**: ควรใช้ Power Supply แยกสำหรับ Servo เพื่อป้องกัน ESP32 Reset
+---
 
-## 📦 Installation
+## 📦 Installation & Setup
 
-### 1. Upload ESP32 Firmware
+ระบบทั้งหมดถูกแยกย่อยออกเป็น 3 ไดเรกทอรี ได้แก่ `client`, `server` และ `esp32`
 
-**Libraries Required (ติดตั้งผ่าน Arduino Library Manager):**
-- `ESP32Servo` by Kevin Harrington
-- `WebSocketsServer` by Markus Sattler
-- `ArduinoJson` by Benoit Blanchon
+### 1. ⚙️ ESP32 Firmware
+1. เปิดไฟล์ `esp32/robot_arm_4dof_final (1).ino` ด้วย Arduino IDE
+2. ติดตั้ง Library ดังนี้:
+   - `Adafruit PWMServoDriver`
+   - `ESP32Servo`
+3. เชื่อมต่อ ESP32 ผ่านสาย USB เข้ากับคอมพิวเตอร์ และจำ COM Port เอาไว้
+4. Upload Firmware ลงบอร์ด 
 
-**Steps:**
-1. เปิด Arduino IDE
-2. ติดตั้ง ESP32 Board ใน Board Manager
-3. เปิดไฟล์ `esp32/esp32_robot_arm.ino`
-4. เลือก Board: ESP32 Dev Module
-5. Upload โค้ดไปยัง ESP32
-
-### 2. ติดตั้ง Web Frontend (React + Vite)
-
-โค้ดส่วนของ Frontend ดั้งเดิม (Vanilla JS) ถูกย้ายและเปลี่ยนเป็น React ในโฟลเดอร์ `client/`
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-### 3. ติดตั้ง Object Detection Server (Optional)
-
-ใช้ FastAPI สำหรับการทำงานแทน Flask ในระบบเดิม
-
+### 2. 🧠 FastAPI Backend (Server)
+สำหรับประมวลผลวิดีโอ (OpenCV) โมเดล YOLOv11 และเชื่อมต่อ Serial ให้แขนกล:
 ```bash
 cd server
 pip install -r requirements.txt
 python app.py
 ```
+> Server จะเริ่มการทำงานที่ `http://localhost:5000` (FastAPI) พร้อมรับคำสั่งไปขับแขนกล และเปิดพอร์ต MJPEG 
 
-Server จะเริ่มที่ `http://localhost:5000` (FastAPI + Uvicorn) พร้อม API สำหรับ:
-- Video stream (MJPEG)
-- Object detection (YOLOv11)
-- ArUco calibration
-- Pick & Place sequences
-- Camera list detection
-
-### 4. Connect to Robot Arm
-
-1. **เปิด ESP32** — รอสักครู่ให้เริ่มทำงาน
-2. **เชื่อมต่อ WiFi** — ค้นหาและเชื่อมต่อ WiFi `RobotArm_AP`
-   - Password: `12345678`
-3. **เปิด Web Interface** — เปิดที่ `http://localhost:5173` (หากรันจาก Vite)
-4. **Connect** — กดปุ่ม CONNECT (IP: `192.168.4.1`, Port: `81`)
-
-## 🎮 Usage
-
-### Control Panel
-
-| Control | Description |
-|---------|-------------|
-| **X Slider** | เลื่อนแขนกลในแนวซ้าย-ขวา (-100 to 100 mm) |
-| **Y Slider** | เลื่อนแขนกลในแนวหน้า-หลัง (-100 to 100 mm) |
-| **Z Slider** | เลื่อนแขนกลในแนวสูง-ต่ำ (0 to 150 mm) |
-
-### Servo Monitors
-
-| Gauge | Joint | Function |
-|-------|-------|----------|
-| J0 (Cyan) | Waist | หมุนฐาน 0°–180° |
-| J1 (Magenta) | Shoulder | ยกไหล่ 0°–180° |
-| J2 (Green) | Elbow | งอข้อศอก 0°–180° |
-| J3 (Orange) | Wrist | หมุนข้อมือ 0°–180° [MG90s] |
-| GRP (Pink) | Gripper | จับ/ปล่อย 0°–180° [MG90s] |
-
-### Quick Actions
-
-| Button | Function |
-|--------|----------|
-| 🏠 HOME | กลับตำแหน่งเริ่มต้น (ทุก Joint = 90°) |
-| ✊ GRAB | หยิบจับ (Wrist ปิด) |
-| 🖐️ RELEASE | ปล่อย (Wrist เปิด) |
-| 🛑 STOP | หยุดฉุกเฉิน |
-
-## 📁 File Structure
-
+### 3. 🌐 React Frontend (Client)
+Dashboard สำหรับแสดงผลกล้อง ควบคุมจุดพิกัด และ Pick & Place
+```bash
+cd client
+npm install
+npm run dev
 ```
-WebRobot/
-├── client/                 # React + Vite Frontend (Active)
-│   ├── src/                # ซอร์สโค้ด React Components
-│   └── package.json        # Node.js dependencies
-├── index.html              # หน้าเว็บหลัก (Vanilla JS เดิม/Deprecated)
-├── style.css               # สไตล์หน้าเว็บเดิม
-├── app.js                  # Logic เดิมการควบคุม
-├── README.md               # คู่มือการใช้งานฉบับนี้
-├── esp32/
-│   └── esp32_robot_arm.ino # Firmware ESP32 (4 joints + gripper, MG90s)
-├── server/
-│   ├── app.py              # FastAPI server - Object Detection & ArUco
-│   ├── requirements.txt    # Python dependencies สำหรับ Backend
-│   └── yolo11n.pt          # YOLOv11 model weights
-└── URDF_Robot_arm/
-    ├── urdf/
-    │   ├── ufdr.urdf       # URDF model definition
-    │   ├── ufdr.csv        # Joint parameters summary
-    │   └── ...
-    ├── meshes/             # 3D mesh files (STL/DAE)
-    ├── config/             # Joint configuration (YAML)
-    └── launch/             # ROS launch files
-```
-
-## 🔧 Configuration
-
-### ปรับค่า Arm Dimensions (app.js)
-
-```javascript
-const CONFIG = {
-    // จาก URDF_Robot_arm specs (ufdr.urdf)
-    BASE_HEIGHT: 56,        // Joint0 z-offset (mm)
-    SHOULDER_OFFSET: 42.6,  // Joint1 offset (mm)
-    ARM_LENGTH_1: 120,      // Upper arm length (mm)
-    ARM_LENGTH_2: 116.25,   // Forearm length (mm)
-};
-```
-
-### เปลี่ยน WiFi Mode (esp32_robot_arm.ino)
-
-```cpp
-// ใช้ Station Mode แทน Access Point
-#define USE_STATION_MODE
-const char* STA_SSID = "YourWiFiName";
-const char* STA_PASSWORD = "YourWiFiPassword";
-```
-
-### WebSocket Command Format
-
-```json
-// Move command (ส่งจาก Web → ESP32)
-{"type": "move", "x": 50, "y": 30, "z": 80, "s1": 120, "s2": 85, "s3": 95, "s4": 90}
-
-// Status response (ส่งจาก ESP32 → Web)
-{"type": "status", "s1": 120, "s2": 85, "s3": 95, "s4": 90, "gripper": 90}
-```
-
-## 📝 License
-
-MIT License — สามารถนำไปใช้และดัดแปลงได้ตามต้องการ
+> สามารถเปิดเข้าใช้งาน UI แบบ Modern ได้ที่ `http://localhost:5173` หากใช้ Vite ทั่วไป
 
 ---
 
-Made with ❤️ for Robotics Education
+## 📚 User Manual & Usage Guide
+
+1. **เริ่มการทำงาน**
+   - รัน FastAPI (`app.py`) ทิ้งไว้ในเบื้องหลัง จากนั้นเปิด React Frontend และเข้าไปที่เบราเซอร์ (`localhost:5173`)
+   
+2. **การเชื่อมต่อกับ แขนกล (ESP32)**
+   - ไปยังส่วนของการควบคุมทางขวามือ หรือปุ่ม Device List
+   - รายชื่อพอร์ต (เช่น `COM3` หรือ `/dev/ttyUSB0`) จะปรากฎ (ผ่านการตรวจสอบด้วย `/robot/ports` ของ Backend)
+   - เลือกพอร์ตที่ถูกต้อง แล้วกด **Connect** แขนกลจะแสดงสถานะ Ready 
+
+3. **การตั้งค่ากล้อง (Camera Settings)**
+   - ในหน้า Dashboard จะพบกับ Live Feed ทันที และมีตัวเลือกให้กำหนด `Camera Index` หากกล้องไม่ติด กรุณากดปุ่มเพื่อเลือกสลับกล้องแล้วกด Start
+   - รอภาพโผล่ ระบบจะโชว์ว่า YOLO Model ถูกโหลดและพร้อมใช้งาน 
+
+4. **การทำ ArUco Calibration (การตั้งค่ามุมมองภาพ)**
+   - ใช้ ArUco Markers (`DICT_4X4_50`) จำนวน 4 ชิ้น (ID: 0, 1, 2, 3) 
+   - วางแผ่น A4 ของฐาน ArUco ชิดไปทางด้านหุ่นยนต์ โดยให้ ID 0, 1 อยู่ใกล้เคียงหุ่นที่สุด (ระยะการติดตั้งในโค้ดอยู่ที่ระยะแกน X เริ่ม 50mm สิ้นสุด 260mm)
+   - กดปุ่ม **Calibrate** ในแอป หากครบ 4 มุม ระบบจะโชว์กล่องตารางสีเขียว (หรือสีอื่นๆ) บอกอาณาเขตพื้นที่ทำงานให้โดยอัตโนมัติ ทำให้การประมวลผลจับวัตถุแม่นยำในโลกจริง
+
+5. **โหมด Manual Control**
+   - **X, Y, Z Sliders**: ใช้ลากเพื่อขยับแขนกลหาพิกัด XYZ ทันที 
+   - **🏠 HOME**: แขนกลจะยกขึ้นเข้าสู่ท่าพื้นฐานอย่างนุ่มนวลที่ 90 องศาทุกแกน 
+   - **✊ GRAB / 🖐️ RELEASE**: ใช้สั่งให้ Gripper กำหดเปิด-ปิด ด้วยคำสั่งตรงผ่าน Serial (`GRIP_OPEN` / `GRIP_CLOSE`)
+   
+6. **Pick and Place Mode**
+   - กล้องจะมองเห็นวัตถุตามรุ่นโมเดล (เช่น ไขควง น็อต กล่อง) พร้อมขึ้น Bounding Box
+   - คลิกเลือกที่วัตถุในรายการระบบ จะส่ง `Sequence โค้ด` นำพาปลายแขนให้ไปอยู่เหนือวัตถุ
+   - แขนกลจะค่อยๆ ลดระดับลง (ค่า `Z`) คีบเป้าหมาย ยกขึ้น และวางเป้าหมายให้เองโดยอิงจากพิกัดอัจฉริยะ (IK)
+
+## 📁 File Structure
+
+```text
+WebRobot/
+├── client/                     # วางระบบ React Frontend + Vite
+│   ├── src/                    # โค้ด Components, APIs, และ CSS ยุคใหม่ 
+│   └── package.json            # Node Dependencies
+├── server/                     # ระบบ Backend ตัวกลางเชื่อม ESP32 และรัน AI
+│   ├── app.py                  # FastAPI แหล่งรัน YOLOv11 และส่งคำสั่ง Serial COM
+│   ├── requirements.txt
+│   └── *.pt (e.g. yolo11.pt)   # Weights ของ YOLOv11 Model (ถ้าวางโฟลเดอร์นี้) 
+├── esp32/                      
+│   └── robot_arm_4dof_final (1).ino  # เฟิร์มแวร์ C++ อิง PCA9685/ESP32Servo 
+├── URDF_Robot_arm/             # ข้อมูลสเปกขนาดโครงสร้าง (อิงโมเดล 3D) 
+└── README.md                   # คู่มือและโครงสร้างโครงการ
+```
