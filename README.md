@@ -5,7 +5,7 @@
 ![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-blue?style=for-the-badge&logo=react)
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-green?style=for-the-badge&logo=fastapi)
 ![ESP32](https://img.shields.io/badge/Microcontroller-ESP32-yellow?style=for-the-badge)
-![YOLO](https://img.shields.io/badge/Detection-YOLOv11-purple?style=for-the-badge)
+![YOLO](https://img.shields.io/badge/Detection-YOLO26-purple?style=for-the-badge)
 
 ## ⚡ Features
 
