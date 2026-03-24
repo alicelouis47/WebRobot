@@ -17,6 +17,8 @@
 - 📹 **Camera & Model Selection** — เลือกระบุกล้อง USB/Webcam ที่ใช้งานจากระบบ และเลือกโมเดล (เช่น yolo11n.pt, yolo26.pt, best.pt) ได้บนหน้าเว็บ
 - 🧠 **PCA9685 PWM Controller** — ควบคุม Servo 4 แกนอย่างแม่นยำราบรื่นผ่านโมดูล PCA9685 ที่ต่อแบบ I2C เข้ากับ ESP32 ลดปัญหาไฟตกจาก ESP32
 - 🛑 **Emergency Stop / Home** — ปุ่มสั่งกลับตำแหน่ง 90 องศา หรือเปิด-ปิด Gripper ผ่าน Dashboard ทันที
+- 🖥️ **Real-time 3D Simulation** — มีโปรแกรมจำลองแขนกลอัจฉริยะ (`robot_arm_sim.py`) ใช้งานบน PC รองรับการคำนวณ IK และสั่งงานตรงผ่าน Serial ได้
+- 🧪 **Jupyter Model Testing** — ทดสอบแบบออฟไลน์สำหรับความแม่นยำของ YOLO Object Detection ไว้อย่างรัดกุม (`test_yolo26.ipynb`)
 
 ---
 
@@ -114,6 +116,14 @@ npm run dev
    - คลิกเลือกที่วัตถุในรายการระบบ จะส่ง `Sequence โค้ด` นำพาปลายแขนให้ไปอยู่เหนือวัตถุ
    - แขนกลจะค่อยๆ ลดระดับลง (ค่า `Z`) คีบเป้าหมาย ยกขึ้น และวางเป้าหมายให้เองโดยอิงจากพิกัดอัจฉริยะ (IK)
 
+7. **ใช้งานโปรแกรมจำลอง 3D (3D Simulator)**
+   - สามารถพิมพ์คำสั่ง: `python robot_arm_sim.py` ในคอมพิวเตอร์เพื่อเปิด GUI ขึ้นมา
+   - ใช้จำลองแขนกลเพื่อทดสอบพิกัด Inverse Kinematics ก่อนส่งไปแขนจริง พร้อมเชื่อมต่อ Serial ไปยัง ESP32 หากเสียบสายไว้
+
+8. **การทดสอบ YOLO ออฟไลน์ผ่าน Jupyter**
+   - รันสภาพแวดล้อมเพื่อทดสอบ: `jupyter notebook`
+   - รันไฟล์ `test_yolo26.ipynb` ในโฟลเดอร์รันงานเพื่อดูพรีวิวความแม่นยำและเวลาที่ใช้ Inference ด้วยภาพตัวอย่าง
+
 ## 📁 File Structure
 
 ```text
@@ -128,5 +138,8 @@ WebRobot/
 ├── esp32/                      
 │   └── robot_arm_4dof_final (1).ino  # เฟิร์มแวร์ C++ อิง PCA9685/ESP32Servo 
 ├── URDF_Robot_arm/             # ข้อมูลสเปกขนาดโครงสร้าง (อิงโมเดล 3D) 
+├── robot_arm_sim.py            # โปรแกรม Simulation แขนกล 3D บน PC
+├── test_yolo26.ipynb           # Jupyter Notebook สำหรับทดสอบ YOLO โดยตรง
+├── best.pt                     # โมเดลสำเร็จรูป (ควรนำใส่ไปใน server/ เพื่อให้ Web เรียกใช้)
 └── README.md                   # คู่มือและโครงสร้างโครงการ
 ```
