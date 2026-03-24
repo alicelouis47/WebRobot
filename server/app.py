@@ -62,7 +62,7 @@ CONFIG = {
     'workspace_x_max': 260,   # 50 + 210
     'workspace_y_min': -148.5, # -297/2
     'workspace_y_max': 148.5,  # 297/2
-    'pick_height': 25,        # Height when picking object
+    'pick_height': 0,        # Height when picking object
     'safe_height': 60,        # Safe travel height (increased by 10mm)
     
     # ArUco Marker Configuration
