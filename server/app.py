@@ -837,26 +837,44 @@ async def robot_move(request: Request):
     y = data.get('y', 120)
     z = data.get('z', 85)
     
+    is_connected = False
+    cmd = ""
     with state.lock:
         if state.robot_serial and state.robot_serial.is_open:
+            is_connected = True
             cmd = f"{int(x)},{int(y)},{int(z)}\n"
             try:
                 state.robot_serial.write(cmd.encode())
-                
-                # Wait for DONE response from Arduino (interpolation complete)
-                start_time = time.time()
-                while time.time() - start_time < 10.0:  # 10s max timeout for long moves
-                    if state.robot_serial.in_waiting > 0:
-                        line = state.robot_serial.readline().decode('utf-8', errors='ignore').strip()
-                        if line == "DONE":
-                            return {'success': True, 'cmd': cmd.strip(), 'status': 'done'}
-                    time.sleep(0.01)
-                    
-                return {'success': True, 'cmd': cmd.strip(), 'warning': 'Timeout waiting for DONE'}
             except Exception as e:
                 return JSONResponse(status_code=500, content={'error': str(e)})
-        else:
-            return JSONResponse(status_code=400, content={'error': 'Robot not connected'})
+                
+    if is_connected:
+        try:
+            import asyncio
+            # Wait for DONE response from Arduino (interpolation complete)
+            start_time = time.time()
+            while time.time() - start_time < 10.0:  # 10s max timeout for long moves
+                in_waiting = 0
+                with state.lock:
+                    if state.robot_serial and state.robot_serial.is_open:
+                        in_waiting = state.robot_serial.in_waiting
+                
+                if in_waiting > 0:
+                    with state.lock:
+                        if state.robot_serial and state.robot_serial.is_open:
+                            line = state.robot_serial.readline().decode('utf-8', errors='ignore').strip()
+                        else:
+                            line = ""
+                    if line == "DONE":
+                        return {'success': True, 'cmd': cmd.strip(), 'status': 'done'}
+                
+                await asyncio.sleep(0.01)
+                
+            return {'success': True, 'cmd': cmd.strip(), 'warning': 'Timeout waiting for DONE'}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={'error': str(e)})
+    else:
+        return JSONResponse(status_code=400, content={'error': 'Robot not connected'})
 
 @app.post('/robot/home')
 def robot_home():
