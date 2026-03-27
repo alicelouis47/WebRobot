@@ -47,8 +47,8 @@ app.add_middleware(
 # ============================================
 CONFIG = {
     'camera_index': 0,  # USB webcam index (0 = default camera)
-    'frame_width': 1920,
-    'frame_height': 1080,
+    'frame_width': 1280,
+    'frame_height': 720,
     'confidence_threshold': 0.5,
     
     # Camera calibration (adjust based on your setup)
@@ -87,10 +87,10 @@ CONFIG = {
     # ID:2 and ID:3 are 105 mm further than ID:0 -> X = 95 + 105 = 200 mm.
     # Y-axis is centered. Facing down the paper, ID1 & ID3 are on the Left (+Y), ID0 & ID2 are on the Right (-Y).
     'marker_real_coords': {
-        0: (95, -56),     # Top-Left (ID:0)
-        1: (95, 56),    # Top-Right (ID:1)
-        2: (200, -56),    # Bottom-Left (ID:2)
-        3: (200, 56),   # Bottom-Right (ID:3)
+        0: (110, -56),     # Top-Left (ID:0)
+        1: (110, 56),    # Top-Right (ID:1)
+        2: (215, -56),    # Bottom-Left (ID:2)
+        3: (215, 56),   # Bottom-Right (ID:3)
     },
 }
 
@@ -116,8 +116,11 @@ class DetectionState:
         self.last_calibration_time = None
         self.show_grid = False  # Display 5mm grid overlay
         
-        # Robot Serial Connection
         self.robot_serial = None
+        
+        # Camera thread for low-latency reading
+        self.camera_thread = None
+        self.stop_camera_thread = False
         
 state = DetectionState()
 
@@ -141,6 +144,16 @@ def load_yolo_model(model_name='yolo11n.pt'):
 # ============================================
 # Camera Functions
 # ============================================
+def _camera_thread_func():
+    """Continuously read frames from camera to keep buffer empty and latency low"""
+    while not state.stop_camera_thread and state.camera is not None and state.camera.isOpened():
+        ret, frame = state.camera.read()
+        if ret:
+            with state.lock:
+                state.current_frame = frame
+        else:
+            time.sleep(0.01)
+
 def init_camera():
     """Initialize USB webcam"""
     if state.camera is not None:
@@ -152,10 +165,17 @@ def init_camera():
         state.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
         state.camera.set(cv2.CAP_PROP_FRAME_WIDTH, CONFIG['frame_width'])
         state.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CONFIG['frame_height'])
+        # Limit buffer size to always get the most recent frame
+        state.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         
         if not state.camera.isOpened():
             print("❌ Failed to open camera")
             return False
+            
+        # Start background thread to continuously read frames
+        state.stop_camera_thread = False
+        state.camera_thread = threading.Thread(target=_camera_thread_func, daemon=True)
+        state.camera_thread.start()
         
         print(f"✅ Camera initialized (index: {CONFIG['camera_index']})")
         return True
@@ -165,10 +185,17 @@ def init_camera():
 
 def release_camera():
     """Release camera resources"""
+    state.stop_camera_thread = True
+    if state.camera_thread is not None:
+        state.camera_thread.join(timeout=1.0)
+        state.camera_thread = None
+        
     if state.camera is not None:
         state.camera.release()
         state.camera = None
         print("📷 Camera released")
+    
+    state.current_frame = None
 
 def get_available_cameras():
     """Get list of available cameras and their names"""
@@ -212,9 +239,9 @@ def get_frame():
     if state.camera is None or not state.camera.isOpened():
         return None
     
-    ret, frame = state.camera.read()
-    if ret:
-        return frame
+    with state.lock:
+        if state.current_frame is not None:
+            return state.current_frame.copy()
     return None
 
 # ============================================
@@ -883,6 +910,19 @@ def robot_home():
         if state.robot_serial and state.robot_serial.is_open:
             try:
                 state.robot_serial.write(b"HOME\n")
+                return {'success': True}
+            except Exception as e:
+                return JSONResponse(status_code=500, content={'error': str(e)})
+        else:
+            return JSONResponse(status_code=400, content={'error': 'Robot not connected'})
+
+@app.post('/robot/stop')
+def robot_stop():
+    """Send STOP command to robot"""
+    with state.lock:
+        if state.robot_serial and state.robot_serial.is_open:
+            try:
+                state.robot_serial.write(b"STOP\n")
                 return {'success': True}
             except Exception as e:
                 return JSONResponse(status_code=500, content={'error': str(e)})

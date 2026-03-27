@@ -173,6 +173,13 @@ void loop() {
       setGripper(GRIPPER_CLOSE_DEG);
       Serial.println("Gripper: CLOSE");
 
+    } else if (data == "STOP") {
+      isMoving = false;
+      targetX = currentX;
+      targetY = currentY;
+      targetZ = currentZ;
+      Serial.println("ACK:STOP");
+
     } else if (data.startsWith("GRIP_")) {
       // GRIP_xxx  → ตั้งองศาโดยตรง  เช่น  GRIP_90
       int deg = data.substring(5).toInt();
@@ -345,6 +352,12 @@ void calculateAndMoveIK(float x, float y, float z, float wristOffset) {
 // ============================================================
 void moveToHome90() {
   Serial.println("Homing...");
+
+  // เช็คสถานะ gripper ถ้าน้อยพอกับองศาปิด (คือปิดอยู่) ให้เปิดก่อน
+  if (gripperServo.read() <= GRIPPER_CLOSE_DEG + 5 && gripperServo.read() >= GRIPPER_CLOSE_DEG - 5) { // หรือใช้วิธีอ่านค่า
+    setGripper(GRIPPER_OPEN_DEG);
+    delay(500); // รอให้ servo เปิดจนสุด
+  }
 
   float startB = currentAngleBase;
   float startS = currentAngleShoulder;

@@ -319,6 +319,8 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'open' })
         });
+      } else if (action === 'stop') {
+        await fetch(`${DETECTION_SERVER}/robot/stop`, { method: 'POST' });
       }
     } catch(err) {
       console.error(`Action ${action} error:`, err);
