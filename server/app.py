@@ -87,10 +87,10 @@ CONFIG = {
     # ID:2 and ID:3 are 105 mm further than ID:0 -> X = 95 + 105 = 200 mm.
     # Y-axis is centered. Facing down the paper, ID1 & ID3 are on the Left (+Y), ID0 & ID2 are on the Right (-Y).
     'marker_real_coords': {
-        0: (110, -56),     # Top-Left (ID:0)
-        1: (110, 56),    # Top-Right (ID:1)
-        2: (215, -56),    # Bottom-Left (ID:2)
-        3: (215, 56),   # Bottom-Right (ID:3)
+        0: (107, -71),     # Top-Left (ID:0)
+        1: (107, 70.5),    # Top-Right (ID:1)
+        2: (211.25, -68.5),    # Bottom-Left (ID:2)
+        3: (211.25, 72),   # Bottom-Right (ID:3)
     },
 }
 
