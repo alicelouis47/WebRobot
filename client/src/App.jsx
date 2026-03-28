@@ -8,15 +8,18 @@ import XYZControls from './components/ControlsColumn/XYZControls';
 import QuickActions from './components/ControlsColumn/QuickActions';
 import ServoMonitor from './components/ControlsColumn/ServoMonitor';
 import ConnectionSettings from './components/ControlsColumn/ConnectionSettings';
+import XYTester from './components/XYTester';
 import { calculateServoAngles } from './utils/kinematics';
 
 const DETECTION_SERVER = 'http://localhost:5000';
 
 function App() {
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [connected, setConnected] = useState(false);
   const [viewMode, setViewMode] = useState('side');
 
-  const [position, setPosition] = useState({ x: 120, y: 0, z: 85 });
+  const [position, setPosition] = useState({ x: 70, y: 0, z: 110 });
+  const [offset, setOffset] = useState({ x: 0, y: 0, z: 0 });
   const [angles, setAngles] = useState([90, 90, 90, 90, 90]);
 
   const [cameraActive, setCameraActive] = useState(false);
@@ -188,6 +191,7 @@ function App() {
         alert(data.message || "Calibration failed.");
       }
     } catch (err) {
+      console.error(err);
       alert("Error reaching calibration server.");
     }
   };
@@ -208,14 +212,19 @@ function App() {
     }
   };
 
-  const handlePositionChange = (axis, value) => {
-    const newPos = { ...position, [axis]: value };
+  const handlePositionChange = (axisOrObj, value) => {
+    let newPos;
+    if (typeof axisOrObj === 'object') {
+      newPos = { ...position, ...axisOrObj };
+    } else {
+      newPos = { ...position, [axisOrObj]: value };
+    }
     setPosition(newPos);
     
     fetch(`${DETECTION_SERVER}/robot/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ x: newPos.x, y: newPos.y, z: newPos.z })
+        body: JSON.stringify({ x: newPos.x + offset.x, y: newPos.y + offset.y, z: newPos.z + offset.z })
     }).catch(err => console.error("Error sending move command:", err));
   };
 
@@ -233,7 +242,7 @@ function App() {
           await fetch(`${DETECTION_SERVER}/robot/move`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ x: step.x, y: step.y, z: step.z })
+            body: JSON.stringify({ x: step.x + offset.x, y: step.y + offset.y, z: step.z + offset.z })
           });
           await delay(1000);
           break;
@@ -254,7 +263,7 @@ function App() {
           await delay(500);
           break;
         case 'home':
-          setPosition({ x: 120, y: 0, z: 85 });
+          setPosition({ x: 70, y: 0, z: 110 });
           await fetch(`${DETECTION_SERVER}/robot/home`, { method: 'POST' });
           await delay(1000);
           break;
@@ -306,7 +315,7 @@ function App() {
     try {
       if (action === 'home') {
         await fetch(`${DETECTION_SERVER}/robot/home`, { method: 'POST' });
-        setPosition({ x: 120, y: 0, z: 85 });
+        setPosition({ x: 70, y: 0, z: 110 });
       } else if (action === 'grab') {
         await fetch(`${DETECTION_SERVER}/robot/gripper`, { 
           method: 'POST',
@@ -366,56 +375,90 @@ function App() {
       <div className="container">
         <Header connected={connected} />
 
+        {/* Navigation Tabs */}
+        <div className="tabs" style={{ display: 'flex', justifyContent: 'center', gap: '20px', padding: '10px 0 20px 0' }}>
+          <button 
+            className={`btn-action ${activeTab === 'dashboard' ? 'home' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+            style={{ padding: '10px 20px', fontSize: '16px', fontWeight: activeTab === 'dashboard' ? 'bold' : 'normal', border: activeTab === 'dashboard' ? '2px solid #00ff88' : '1px solid rgba(255,255,255,0.2)' }}
+          >
+            Dashboard
+          </button>
+          <button 
+            className={`btn-action ${activeTab === 'xytester' ? 'home' : ''}`}
+            onClick={() => setActiveTab('xytester')}
+            style={{ padding: '10px 20px', fontSize: '16px', fontWeight: activeTab === 'xytester' ? 'bold' : 'normal', border: activeTab === 'xytester' ? '2px solid #00ff88' : '1px solid rgba(255,255,255,0.2)' }}
+          >
+             XY & Z Tester
+          </button>
+        </div>
+
         <main className="main-content">
-          <div className="visuals-column">
-            <ArmVisualization
-              viewMode={viewMode}
-              setViewMode={setViewMode}
-              position={position}
-              angles={angles}
-            />
-            <ObjectDetection
-              cameraActive={cameraActive}
-              onStartCamera={handleStartCamera}
-              onStopCamera={handleStopCamera}
-              onDetect={() => { }}
-              availableCameras={availableCameras}
-              selectedCamera={selectedCamera}
-              setSelectedCamera={setSelectedCamera}
-              availableModels={availableModels}
-              selectedModel={selectedModel}
-              onModelSwitch={handleModelSwitch}
-              isModelSwitching={isModelSwitching}
-              detectedObjects={detectedObjects}
-              onExecutePickPlace={handleExecutePickPlace}
-            />
-            <ArucoCalibration
-              arucoStatus={arucoStatus}
-              onCalibrate={handleCalibrateAruco}
-              showGrid={showGrid}
-              onToggleGrid={handleToggleGrid}
-            />
-          </div>
+          {activeTab === 'dashboard' ? (
+            <>
+              <div className="visuals-column">
+                <ArmVisualization
+                  viewMode={viewMode}
+                  setViewMode={setViewMode}
+                  position={position}
+                  angles={angles}
+                />
+                <ObjectDetection
+                  cameraActive={cameraActive}
+                  onStartCamera={handleStartCamera}
+                  onStopCamera={handleStopCamera}
+                  onDetect={() => { }}
+                  availableCameras={availableCameras}
+                  selectedCamera={selectedCamera}
+                  setSelectedCamera={setSelectedCamera}
+                  availableModels={availableModels}
+                  selectedModel={selectedModel}
+                  onModelSwitch={handleModelSwitch}
+                  isModelSwitching={isModelSwitching}
+                  detectedObjects={detectedObjects}
+                  onExecutePickPlace={handleExecutePickPlace}
+                />
+                <ArucoCalibration
+                  arucoStatus={arucoStatus}
+                  onCalibrate={handleCalibrateAruco}
+                  showGrid={showGrid}
+                  onToggleGrid={handleToggleGrid}
+                />
+              </div>
 
-          <div className="controls-column">
-            <div className="control-row">
-              <XYZControls
-                position={position}
-                onPositionChange={handlePositionChange}
-              />
-              <QuickActions onAction={handleAction} />
+              <div className="controls-column">
+                <div className="control-row">
+                  <XYZControls
+                    position={position}
+                    onPositionChange={handlePositionChange}
+                    offset={offset}
+                    onOffsetChange={(axis, val) => setOffset({ ...offset, [axis]: val })}
+                  />
+                  <QuickActions onAction={handleAction} />
+                </div>
+
+                <ServoMonitor angles={angles} />
+
+                <ConnectionSettings
+                  availablePorts={availablePorts}
+                  selectedPort={selectedPort}
+                  setSelectedPort={setSelectedPort}
+                  connected={connected}
+                  onConnect={handleConnect}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="full-width-column" style={{ width: '100%', maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <XYTester position={position} onPositionChange={handlePositionChange} />
+              
+              <div className="control-row" style={{ display: 'flex', justifyContent: 'center' }}>
+                <QuickActions onAction={handleAction} />
+              </div>
+
+              <ServoMonitor angles={angles} />
             </div>
-
-            <ServoMonitor angles={angles} />
-
-            <ConnectionSettings
-              availablePorts={availablePorts}
-              selectedPort={selectedPort}
-              setSelectedPort={setSelectedPort}
-              connected={connected}
-              onConnect={handleConnect}
-            />
-          </div>
+          )}
         </main>
 
         <footer className="footer">

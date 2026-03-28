@@ -100,16 +100,7 @@ export class ArmVisualizer {
             z: elbow.z + Math.sin(totalAngle) * L2
         };
 
-        const gripperOffsetA = CONFIG.GRIPPER_OFFSET_A || 0;
-        const gripperOffsetL = CONFIG.GRIPPER_OFFSET_L || 0;
-
-        const gripper = {
-            x: end.x + Math.cos(baseAngle) * gripperOffsetA - Math.sin(baseAngle) * gripperOffsetL,
-            y: end.y + Math.sin(baseAngle) * gripperOffsetA + Math.cos(baseAngle) * gripperOffsetL,
-            z: end.z
-        };
-
-        return { base, elbow, end, gripper };
+        return { base, elbow, end };
     }
 
     drawSideView(armPos, x, y, z) {
@@ -126,19 +117,13 @@ export class ArmVisualizer {
             x: this.centerX + armPos.end.x * this.scale,
             y: baseY - armPos.end.z * this.scale
         };
-        const gripper = {
-            x: this.centerX + armPos.gripper.x * this.scale,
-            y: baseY - armPos.gripper.z * this.scale
-        };
 
         this.drawBaseCircle(base.x, base.y);
         this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);
         this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);
-        this.drawArmSegment(end.x, end.y, gripper.x, gripper.y, '#ffaa00', 6);
         this.drawJoint(base.x, base.y, 15, '#00f0ff');
         this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');
-        this.drawJoint(end.x, end.y, 8, '#ffaa00');
-        this.drawEndEffector(gripper.x, gripper.y);
+        this.drawEndEffector(end.x, end.y);
     }
 
     drawTopView(armPos, x, y, z) {
@@ -154,21 +139,15 @@ export class ArmVisualizer {
             x: this.centerX + armPos.end.x * this.scale,
             y: this.centerY - armPos.end.y * this.scale
         };
-        const gripper = {
-            x: this.centerX + armPos.gripper.x * this.scale,
-            y: this.centerY - armPos.gripper.y * this.scale
-        };
 
         this.drawRangeCircle(base.x, base.y, (CONFIG.ARM_LENGTH_1 + CONFIG.ARM_LENGTH_2) * this.scale);
 
         this.drawBaseCircle(base.x, base.y);
         this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);
         this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);
-        this.drawArmSegment(end.x, end.y, gripper.x, gripper.y, '#ffaa00', 6);
         this.drawJoint(base.x, base.y, 15, '#00f0ff');
         this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');
-        this.drawJoint(end.x, end.y, 8, '#ffaa00');
-        this.drawEndEffector(gripper.x, gripper.y);
+        this.drawEndEffector(end.x, end.y);
     }
 
     drawFrontView(armPos, x, y, z) {
@@ -185,19 +164,13 @@ export class ArmVisualizer {
             x: this.centerX + armPos.end.y * this.scale,
             y: baseY - armPos.end.z * this.scale
         };
-        const gripper = {
-            x: this.centerX + armPos.gripper.y * this.scale,
-            y: baseY - armPos.gripper.z * this.scale
-        };
 
         this.drawBaseCircle(base.x, base.y);
         this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);
         this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);
-        this.drawArmSegment(end.x, end.y, gripper.x, gripper.y, '#ffaa00', 6);
         this.drawJoint(base.x, base.y, 15, '#00f0ff');
         this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');
-        this.drawJoint(end.x, end.y, 8, '#ffaa00');
-        this.drawEndEffector(gripper.x, gripper.y);
+        this.drawEndEffector(end.x, end.y);
     }
 
     draw3DView(armPos, x, y, z) {
@@ -214,7 +187,6 @@ export class ArmVisualizer {
         const base = toIso(armPos.base);
         const elbow = toIso(armPos.elbow);
         const end = toIso(armPos.end);
-        const gripper = toIso(armPos.gripper);
 
         this.draw3DAxes(toIso);
         this.drawGroundShadow(armPos, toIso);
@@ -222,11 +194,9 @@ export class ArmVisualizer {
         this.drawBaseCircle(base.x, base.y);
         this.drawArmSegment(base.x, base.y, elbow.x, elbow.y, '#00f0ff', 12);
         this.drawArmSegment(elbow.x, elbow.y, end.x, end.y, '#ff00aa', 10);
-        this.drawArmSegment(end.x, end.y, gripper.x, gripper.y, '#ffaa00', 6);
         this.drawJoint(base.x, base.y, 15, '#00f0ff');
         this.drawJoint(elbow.x, elbow.y, 12, '#ff00aa');
-        this.drawJoint(end.x, end.y, 8, '#ffaa00');
-        this.drawEndEffector(gripper.x, gripper.y);
+        this.drawEndEffector(end.x, end.y);
     }
 
     drawViewLabel(label) {
@@ -305,7 +275,6 @@ export class ArmVisualizer {
         const base = toIso({ x: 0, y: 0, z: 0 });
         const elbow = toIso({ x: armPos.elbow.x, y: armPos.elbow.y, z: 0 });
         const end = toIso({ x: armPos.end.x, y: armPos.end.y, z: 0 });
-        const gripper = toIso({ x: armPos.gripper.x, y: armPos.gripper.y, z: 0 });
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.lineWidth = 4;
@@ -315,7 +284,6 @@ export class ArmVisualizer {
         ctx.moveTo(base.x, base.y);
         ctx.lineTo(elbow.x, elbow.y);
         ctx.lineTo(end.x, end.y);
-        ctx.lineTo(gripper.x, gripper.y);
         ctx.stroke();
 
         ctx.setLineDash([]);

@@ -3,8 +3,6 @@ export const CONFIG = {
     SHOULDER_OFFSET: 42.6,
     ARM_LENGTH_1: 120,
     ARM_LENGTH_2: 116.25,
-    GRIPPER_OFFSET_L: 35.0, // Perpendicular offset
-    GRIPPER_OFFSET_A: 5.0,  // Axis offset
     SERVO_MIN: 0,
     SERVO_MAX: 180,
     DEFAULT_X: 0,

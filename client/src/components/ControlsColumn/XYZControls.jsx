@@ -1,6 +1,6 @@
 import React from 'react';
 
-function XYZControls({ position, onPositionChange }) {
+function XYZControls({ position, onPositionChange, offset, onOffsetChange }) {
     const handleSliderChange = (axis, value) => {
         onPositionChange(axis, parseInt(value));
     };
@@ -97,6 +97,45 @@ function XYZControls({ position, onPositionChange }) {
                         min="0" max="150"
                         onChange={(e) => handleInputChange('z', e.target.value)}
                     />
+                </div>
+
+                {/* Offset Controls */}
+                <div className="axis-control">
+                    <div className="axis-header">
+                        <span className="axis-label" style={{ color: '#fff' }}>Coordinate Offsets</span>
+                    </div>
+                    <div className="slider-container" style={{ gap: '10px', marginTop: '10px', display: 'flex' }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <label style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>X Offset</label>
+                            <input
+                                type="number"
+                                className="axis-input"
+                                style={{ position: 'relative', width: '100%', right: 0 }}
+                                value={offset?.x || 0}
+                                onChange={(e) => onOffsetChange && onOffsetChange('x', parseInt(e.target.value) || 0)}
+                            />
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <label style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>Y Offset</label>
+                            <input
+                                type="number"
+                                className="axis-input"
+                                style={{ position: 'relative', width: '100%', right: 0 }}
+                                value={offset?.y || 0}
+                                onChange={(e) => onOffsetChange && onOffsetChange('y', parseInt(e.target.value) || 0)}
+                            />
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <label style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>Z Offset</label>
+                            <input
+                                type="number"
+                                className="axis-input"
+                                style={{ position: 'relative', width: '100%', right: 0 }}
+                                value={offset?.z || 0}
+                                onChange={(e) => onOffsetChange && onOffsetChange('z', parseInt(e.target.value) || 0)}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
