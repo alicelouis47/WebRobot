@@ -120,6 +120,7 @@ class DetectionState:
         
         # Camera thread for low-latency reading
         self.camera_thread = None
+        self.detection_thread = None
         self.stop_camera_thread = False
         
 state = DetectionState()
@@ -154,6 +155,23 @@ def _camera_thread_func():
         else:
             time.sleep(0.01)
 
+def _detection_thread_func():
+    """Run object detection in background to avoid blocking video stream"""
+    while not state.stop_camera_thread:
+        frame = get_frame()
+        if frame is None or state.model is None:
+            time.sleep(0.05)
+            continue
+            
+        try:
+            _, detected = detect_objects(frame)
+            with state.lock:
+                state.detected_objects = detected
+        except Exception as e:
+            print(f"Background detection error: {e}")
+            
+        time.sleep(0.01)
+
 def init_camera():
     """Initialize USB webcam"""
     if state.camera is not None:
@@ -177,6 +195,9 @@ def init_camera():
         state.camera_thread = threading.Thread(target=_camera_thread_func, daemon=True)
         state.camera_thread.start()
         
+        state.detection_thread = threading.Thread(target=_detection_thread_func, daemon=True)
+        state.detection_thread.start()
+        
         print(f"✅ Camera initialized (index: {CONFIG['camera_index']})")
         return True
     except Exception as e:
@@ -189,6 +210,10 @@ def release_camera():
     if state.camera_thread is not None:
         state.camera_thread.join(timeout=1.0)
         state.camera_thread = None
+        
+    if state.detection_thread is not None:
+        state.detection_thread.join(timeout=1.0)
+        state.detection_thread = None
         
     if state.camera is not None:
         state.camera.release()
@@ -521,26 +546,49 @@ def generate_frames():
     while True:
         frame = get_frame()
         if frame is None:
-            time.sleep(0.1)
+            time.sleep(0.05)
             continue
         
-        # Run detection if model is loaded
-        if state.model is not None:
-            frame, detected = detect_objects(frame)
-            with state.lock:
-                state.detected_objects = detected
+        with state.lock:
+            detected = list(state.detected_objects)
+            
+        # Draw the latest known bounding boxes on the fresh frame
+        for obj in detected:
+            x1, y1, x2, y2 = obj['bbox']
+            class_name = obj['class']
+            confidence = obj['confidence']
+            center_x, center_y = obj['center_pixel']
+            robot_coords = obj['robot_coords']
+            
+            # Draw bounding box
+            color = (0, 255, 0)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            
+            # Draw label
+            label = f"{class_name} {confidence:.2f}"
+            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            
+            # Draw center point
+            cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+            
+            # Draw robot coordinates
+            coord_text = f"X:{robot_coords['x']} Y:{robot_coords['y']}"
+            cv2.putText(frame, coord_text, (x1, y2 + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
         
         # Draw ArUco overlay
         frame = draw_aruco_overlay(frame)
         
-        # Encode frame as JPEG
-        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        # Encode frame as JPEG (lower quality for faster streaming)
+        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         if not ret:
             continue
         
         frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+               
+        # Cap framerate to ~30 FPS to reduce CPU and network usage
+        time.sleep(0.033)
 
 # ============================================
 # API Routes
